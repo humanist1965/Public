@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Neural Network - Magic Eye (Autostereogram)</title>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: 'Courier New', monospace; text-align: center; margin: 0; padding: 20px; }
+        h1 { color: #58a6ff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 2px; }
+        .info { background: rgba(56, 139, 253, 0.1); padding: 15px; border-radius: 6px; max-width: 700px; margin: 10px auto; border: 1px solid rgba(56, 139, 253, 0.2); font-size: 0.9em; }
+        b { color: #58a6ff; }
+        canvas { display: block; margin: 25px auto; border: 10px solid #161b22; box-shadow: 0 10px 40px rgba(0,0,0,0.7); cursor: zoom-in; }
+        .footer { font-size: 0.8em; opacity: 0.6; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>[Hidden Layer] Neural Net 3D</h1>
+    
+    <div class="info">
+        <p><b>Target Structure:</b> A simple 3-layer Feedforward Net.</p>
+        <p><b>Left:</b> Input (3 nodes, closest) → <b>Middle:</b> Hidden (4 nodes, mid) → <b>Right:</b> Output (2 nodes, farthest).</p>
+        <p><b>Method:</b> Relax your gaze, look <i>through</i> the pattern at the wall behind the monitor. The blurry circuit patterns should merge. Back away slowly until the 3D structure pops forward.</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="footer">A Single Image Random Dot Stereogram (SIRDS) generator</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const width = 1100; // Large canvas for better resolution
+        const height = 800;
+        const patternStripWidth = 110; // The repeating block width
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // --- 1. Generate the Topographic Depth Map of the Neural Network ---
+        // (Grayscale map: Pure White = Closest, Black = Farthest)
+        const depthCanvas = document.createElement('canvas');
+        const dCtx = depthCanvas.getContext('2d');
+        depthCanvas.width = width;
+        depthCanvas.height = height;
+
+        // Set distant background depth (near-black)
+        dCtx.fillStyle = 'rgb(15, 15, 15)'; 
+        dCtx.fillRect(0, 0, width, height);
+
+        // Map Layout Parameters
+        const xStart = 150;
+        const xEnd = width - 150;
+        const centerY = height / 2;
+        const nodeGirth = 25; // How tubular the connection lines are
+
+        // A. Define Node Layers & Depths
+        const layers = [
+            { count: 3, x: xStart, depth: 255 },  // Input: Bright (Closest)
+            { count: 4, x: centerY - 100, depth: 160 }, // Hidden (Mid) - (Actually used centerY as reference x here by mistake, should have been a ratio)
+            { count: 2, x: xEnd, depth: 60 }    // Output: Dark (Farthest)
+        ];
+        
+        // Correcting Hidden layer position calculation
+        layers[1].x = xStart + (xEnd - xStart) / 2;
+
+        const nodeDepthBuffer = []; // Store node centers for line drawing
+
+        // Draw Nodes
+        layers.forEach((layer, layerIdx) => {
+            const spacing = (height - 200) / (layer.count - 1);
+            const startY = centerY - spacing * (layer.count - 1) / 2;
+            const nodesInLayer = [];
+
+            for (let i = 0; i < layer.count; i++) {
+                const nodeY = startY + (spacing * i);
+                
+                // Draw nodes as bright (closer) rounded cones
+                dCtx.fillStyle = `rgb(${layer.depth}, ${layer.depth}, ${layer.depth})`;
+                
+                // Outer ring (for smoother rounding)
+                dCtx.beginPath();
+                dCtx.arc(layer.x, nodeY, nodeGirth * 1.5, 0, Math.PI * 2);
+                dCtx.fill();
+                
+                // Inner bright center (closest point)
+                const centerDepth = Math.min(255, layer.depth + 40);
+                dCtx.fillStyle = `rgb(${centerDepth}, ${centerDepth}, ${centerDepth})`;
+                dCtx.beginPath();
+                dCtx.arc(layer.x, nodeY, nodeGirth, 0, Math.PI * 2);
+                dCtx.fill();
+
+                nodesInLayer.push({ x: layer.x, y: nodeY, depth: layer.depth });
+            }
+            nodeDepthBuffer.push(nodesInLayer);
+        });
+
+        // B. Connect Nodes (Draw Axon/Connection Lines)
+        dCtx.lineCap = 'round';
+        dCtx.lineWidth = nodeGirth * 1.5;
+
+        for (let l = 0; l < layers.length - 1; l++) {
+            const currentLayerNodes = nodeDepthBuffer[l];
+            const nextLayerNodes = nodeDepthBuffer[l + 1];
+
+            currentLayerNodes.forEach(cNode => {
+                nextLayerNodes.forEach(nNode => {
+                    // Create a gradient for the connection line: closer(brighter) -> farther(darker)
+                    const gradient = dCtx.createLinearGradient(cNode.x, cNode.y, nNode.x, nNode.y);
+                    
+                    // The line itself needs depth. We can't just draw a flat line.
+                    // Instead, we create a slight ramp from bright to dark.
+                    const startColor = cNode.depth - 20;
+                    const endColor = nNode.depth - 20;
+                    
+                    gradient.addColorStop(0, `rgb(${startColor}, ${startColor}, ${startColor})`);
+                    gradient.addColorStop(1, `rgb(${endColor}, ${endColor}, ${endColor})`);
+                    
+                    dCtx.strokeStyle = gradient;
+                    dCtx.beginPath();
+                    dCtx.moveTo(cNode.x, cNode.y);
+                    dCtx.lineTo(nNode.x, nNode.y);
+                    dCtx.stroke();
+                });
+            });
+        }
+
+        // --- 2. Generate the Colorful Circuit Pattern Texture ---
+        const patternCanvas = document.createElement('canvas');
+        const pCtx = patternCanvas.getContext('2d');
+        patternCanvas.width = patternStripWidth;
+        patternCanvas.height = height;
+
+        // Abstract colorful noise base
+        const textureImageData = pCtx.createImageData(patternStripWidth, height);
+        for (let i = 0; i < textureImageData.data.length; i += 4) {
+            const val = Math.random();
+            if (val > 0.98) { textureImageData.data[i]=textureImageData.data[i+1]=textureImageData.data[i+2]=255; } // Sparkles
+            else if (val > 0.5) { // Circuit Blues/Greens
+                textureImageData.data[i] = 10;
+                textureImageData.data[i + 1] = 60 + Math.random() * 80;
+                textureImageData.data[i + 2] = 130 + Math.random() * 80;
+            } else { // Darker background
+                textureImageData.data[i] = 10;
+                textureImageData.data[i + 1] = 20;
+                textureImageData.data[i + 2] = 30;
+            }
+            textureImageData.data[i + 3] = 255; // Alpha
+        }
+        pCtx.putImageData(textureImageData, 0, 0);
+
+        // Add a visible structure (circuit board traces) to help eyes "anchor"
+        pCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        pCtx.lineWidth = 1;
+        for (let x = 0; x < patternStripWidth; x += 12) {
+            if (Math.random() > 0.3) {
+                pCtx.beginPath();
+                pCtx.moveTo(x, 0);
+                pCtx.lineTo(x + (Math.random() - 0.5) * 20, height);
+                pCtx.stroke();
+            }
+        }
+        pCtx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        for (let i = 0; i < 50; i++) {
+            pCtx.fillRect(Math.random() * patternStripWidth, Math.random() * height, 6, 6); // Nodes
+        }
+
+        // --- 3. Generate the Stereogram: The Core Logic ---
+        // Shifts the background color pattern based on the grayscale Depth Map topography
+        const resultImageData = ctx.createImageData(width, height);
+        const depthData = dCtx.getImageData(0, 0, width, height).data;
+        const patternData = pCtx.getImageData(0, 0, patternStripWidth, height).data;
+
+        for (let y = 0; y < height; y++) {
+            // Buffer to store calculated pixel values for this row
+            let rowPixels = new Uint8ClampedArray(width * 4);
+
+            for (let x = 0; x < width; x++) {
+                if (x < patternStripWidth) {
+                    // Leftmost strip: Simply copy the base pattern texture
+                    const patternIndex = (y * patternStripWidth + x) * 4;
+                    copyPixel(patternData, patternIndex, rowPixels, x * 4);
+                } else {
+                    // Echo/Repeat logic: Look back 'patternStripWidth'
+                    // Apply a 'depth shift' based on the grayscale value in the Depth Map
+                    const depthMapIndex = (y * width + x) * 4;
+                    const depthValue = depthData[depthMapIndex]; // 0 (Black/Far) to 255 (White/Close)
+                    
+                    // Exaggerated depth shift: Closest pixels (255) shift 45px (increased from 35), farthest shift 0.
+                    // This creates massive depth difference.
+                    const shiftAmount = Math.round((depthValue / 255) * 45);
+                    const lookBackDistance = patternStripWidth - shiftAmount;
+                    
+                    let sourceX = x - lookBackDistance;
+                    // Boundary correction (force wrap-around if shift goes out of left bounds)
+                    if (sourceX < 0) sourceX += patternStripWidth; 
+
+                    copyPixel(rowPixels, sourceX * 4, rowPixels, x * 4);
+                }
+            }
+
+            // Write the calculated row back to the final image data buffer
+            for (let x = 0; x < width; x++) {
+                const targetIdx = (y * width + x) * 4;
+                copyPixel(rowPixels, x * 4, resultImageData.data, targetIdx);
+            }
+        }
+
+        // --- 4. Render the final Image ---
+        ctx.putImageData(resultImageData, 0, 0);
+
+        // Helper functions
+        function copyPixel(source, srcIdx, target, targetIdx) {
+            target[targetIdx] = source[srcIdx];         // R
+            target[targetIdx + 1] = source[srcIdx + 1]; // G
+            target[targetIdx + 2] = source[srcIdx + 2]; // B
+            target[targetIdx + 3] = source[srcIdx + 3]; // A
+        }
+    </script>
+</body>
+</html>
