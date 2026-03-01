@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boids Murmuration Simulation</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #050505; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        canvas { display: block; }
+        .ui { 
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            color: #fff; 
+            background: rgba(255, 255, 255, 0.1); 
+            backdrop-filter: blur(5px);
+            padding: 15px; 
+            border-radius: 8px; 
+            pointer-events: none; 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        b { color: #fab387; font-size: 1.1em; }
+        .sub { font-size: 0.8em; opacity: 0.7; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="ui">
+        <b>Boids Algorithm</b><br>
+        Separation | Alignment | Cohesion
+        <div class="sub">Move your mouse to repel the flock</div>
+    </div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        const mouse = { x: -1000, y: -1000 };
+
+        const BOID_COUNT = 150;
+        const boids = [];
+
+        class Boid {
+            constructor() {
+                this.pos = { x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight };
+                this.vel = { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 4 };
+                this.acc = { x: 0, y: 0 };
+                this.maxSpeed = 3.5;
+                this.maxForce = 0.05;
+                this.perception = 60; 
+            }
+
+            flock(boids) {
+                let sep = this.separation(boids);
+                let ali = this.alignment(boids);
+                let coh = this.cohesion(boids);
+                let avoid = this.avoidMouse();
+
+                // Weighting the forces
+                this.acc.x += sep.x * 1.5 + ali.x * 1.0 + coh.x * 1.0 + avoid.x * 2.0;
+                this.acc.y += sep.y * 1.5 + ali.y * 1.0 + coh.y * 1.0 + avoid.y * 2.0;
+            }
+
+            avoidMouse() {
+                let steering = { x: 0, y: 0 };
+                let d = Math.hypot(this.pos.x - mouse.x, this.pos.y - mouse.y);
+                if (d < 100) {
+                    let diff = { x: this.pos.x - mouse.x, y: this.pos.y - mouse.y };
+                    diff.x /= d; diff.y /= d;
+                    steering.x = diff.x;
+                    steering.y = diff.y;
+                    return this.steer(steering);
+                }
+                return { x: 0, y: 0 };
+            }
+
+            update() {
+                this.pos.x += this.vel.x;
+                this.pos.y += this.vel.y;
+                this.vel.x += this.acc.x;
+                this.vel.y += this.acc.y;
+
+                const speed = Math.sqrt(this.vel.x**2 + this.vel.y**2);
+                if (speed > this.maxSpeed) {
+                    this.vel.x = (this.vel.x / speed) * this.maxSpeed;
+                    this.vel.y = (this.vel.y / speed) * this.maxSpeed;
+                }
+
+                this.acc = { x: 0, y: 0 };
+                this.edges();
+            }
+
+            edges() {
+                if (this.pos.x > width) this.pos.x = 0;
+                else if (this.pos.x < 0) this.pos.x = width;
+                if (this.pos.y > height) this.pos.y = 0;
+                else if (this.pos.y < 0) this.pos.y = height;
+            }
+
+            alignment(boids) {
+                let steering = { x: 0, y: 0 };
+                let total = 0;
+                for (let other of boids) {
+                    let d = Math.hypot(this.pos.x - other.pos.x, this.pos.y - other.pos.y);
+                    if (other != this && d < this.perception) {
+                        steering.x += other.vel.x;
+                        steering.y += other.vel.y;
+                        total++;
+                    }
+                }
+                if (total > 0) {
+                    steering.x /= total; steering.y /= total;
+                    return this.steer(steering);
+                }
+                return { x: 0, y: 0 };
+            }
+
+            cohesion(boids) {
+                let steering = { x: 0, y: 0 };
+                let total = 0;
+                for (let other of boids) {
+                    let d = Math.hypot(this.pos.x - other.pos.x, this.pos.y - other.pos.y);
+                    if (other != this && d < this.perception) {
+                        steering.x += other.pos.x;
+                        steering.y += other.pos.y;
+                        total++;
+                    }
+                }
+                if (total > 0) {
+                    steering.x /= total; steering.y /= total;
+                    steering.x -= this.pos.x; steering.y -= this.pos.y;
+                    return this.steer(steering);
+                }
+                return { x: 0, y: 0 };
+            }
+
+            separation(boids) {
+                let steering = { x: 0, y: 0 };
+                let total = 0;
+                for (let other of boids) {
+                    let d = Math.hypot(this.pos.x - other.pos.x, this.pos.y - other.pos.y);
+                    if (other != this && d < this.perception * 0.5) {
+                        let diff = { x: this.pos.x - other.pos.x, y: this.pos.y - other.pos.y };
+                        diff.x /= (d * d); // Inversely proportional to square of distance
+                        diff.y /= (d * d); 
+                        steering.x += diff.x; steering.y += diff.y;
+                        total++;
+                    }
+                }
+                if (total > 0) {
+                    steering.x /= total; steering.y /= total;
+                    return this.steer(steering);
+                }
+                return { x: 0, y: 0 };
+            }
+
+            steer(target) {
+                const mag = Math.sqrt(target.x**2 + target.y**2);
+                if (mag > 0) {
+                    target.x = (target.x / mag) * this.maxSpeed;
+                    target.y = (target.y / mag) * this.maxSpeed;
+                    let steer = { x: target.x - this.vel.x, y: target.y - this.vel.y };
+                    const steerMag = Math.sqrt(steer.x**2 + steer.y**2);
+                    if (steerMag > this.maxForce) {
+                        steer.x = (steer.x / steerMag) * this.maxForce;
+                        steer.y = (steer.y / steerMag) * this.maxForce;
+                    }
+                    return steer;
+                }
+                return { x: 0, y: 0 };
+            }
+
+            draw() {
+                const angle = Math.atan2(this.vel.y, this.vel.x);
+                const speed = Math.sqrt(this.vel.x**2 + this.vel.y**2);
+                const hue = 200 + (speed * 20); // Dynamic color based on speed
+
+                ctx.save();
+                ctx.translate(this.pos.x, this.pos.y);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(12, 0);
+                ctx.lineTo(-6, 6);
+                ctx.lineTo(-3, 0);
+                ctx.lineTo(-6, -6);
+                ctx.closePath();
+                ctx.fillStyle = `hsla(${hue}, 80%, 70%, 0.9)`;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        function setup() {
+            resize();
+            for (let i = 0; i < BOID_COUNT; i++) boids.push(new Boid());
+        }
+
+        function loop() {
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.25)'; 
+            ctx.fillRect(0, 0, width, height);
+
+            for (let boid of boids) {
+                boid.flock(boids);
+                boid.update();
+                boid.draw();
+            }
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('mouseout', () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        });
+
+        setup();
+        loop();
+    </script>
+</body>
+</html>
