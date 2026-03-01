@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Autostereogram Generator</title>
+    <style>
+        body { background: #222; color: white; text-align: center; font-family: sans-serif; }
+        canvas { border: 5px solid #444; cursor: crosshair; background: #000; }
+        .instructions { max-width: 600px; margin: 20px auto; line-height: 1.6; color: #ccc; }
+        b { color: #fab387; }
+    </style>
+</head>
+<body>
+    <h1>3D Magic Eye Generator</h1>
+    <canvas id="canvas"></canvas>
+    
+    <div class="instructions">
+        <p><b>How to see the 3D Donut:</b><br>
+        Put your nose close to the screen. Focus your eyes as if you are looking <i>through</i> the monitor at the wall behind it. Slowly move your head back without changing your focus. The blurry patterns will eventually snap into a 3D shape.</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const width = 800;
+        const height = 600;
+        const patternWidth = 80; // The "strip" width that repeats
+        
+        canvas.width = width;
+        canvas.height = height;
+
+        // 1. Generate a Depth Map (A Torus/Donut shape)
+        // Bright = Close, Dark = Far
+        function getDepth(x, y) {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const dx = x - centerX;
+            const dy = y - centerY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            // Torus formula: dist from center of the tube
+            const radius = 150; // Radius of the donut ring
+            const thickness = 60; // Thickness of the tube
+            const d = Math.abs(dist - radius);
+            
+            if (d < thickness) {
+                // Return a value between 0 and 30 for pixel shift
+                return Math.cos((d / thickness) * (Math.PI / 2)) * 25;
+            }
+            return 0;
+        }
+
+        // 2. Generate the Stereogram
+        const imgData = ctx.createImageData(width, height);
+        
+        for (let y = 0; y < height; y++) {
+            // Store the pixel values for this row
+            let rowPixels = [];
+
+            for (let x = 0; x < width; x++) {
+                if (x < patternWidth) {
+                    // Leftmost strip: Generate random grayscale noise
+                    const val = Math.floor(Math.random() * 255);
+                    rowPixels[x] = val;
+                } else {
+                    // Subsequent strips: Copy a pixel from 'patternWidth' distance ago
+                    // BUT shift it slightly based on the depth map
+                    const depthShift = getDepth(x, y);
+                    const lookBackbackIndex = x - (patternWidth - Math.round(depthShift));
+                    rowPixels[x] = rowPixels[lookBackbackIndex];
+                }
+
+                // Set the canvas pixels (RGBA)
+                const i = (y * width + x) * 4;
+                const p = rowPixels[x];
+                imgData.data[i] = p;     // R
+                imgData.data[i + 1] = p; // G
+                imgData.data[i + 2] = p; // B
+                imgData.data[i + 3] = 255; // A
+            }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+    </script>
+</body>
+</html>
