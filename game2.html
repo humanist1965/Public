@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peg Solitaire - Timer Edition</title>
+    <style>
+        :root {
+            --bg: #1e1e2e;
+            --board-color: #45322e;
+            --hole-color: #11111b;
+            --peg-color: #f5c2e7;
+            --rotation: 0deg;
+            --accent: #fab387;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: #cdd6f4;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .stats-container {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            background: rgba(0,0,0,0.2);
+            padding: 10px 25px;
+            border-radius: 50px;
+            border: 1px solid #313244;
+        }
+
+        .stat-item { display: flex; flex-direction: column; align-items: center; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; color: var(--accent); opacity: 0.8; }
+
+        .board-wrapper {
+            perspective: 1000px;
+            padding: 20px;
+        }
+
+        .board-container {
+            background: var(--board-color);
+            padding: 30px;
+            border-radius: 50%;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 20px rgba(0,0,0,0.3);
+            transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform: rotate(var(--rotation));
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(7, 50px);
+            grid-template-rows: repeat(7, 50px);
+            gap: 12px;
+        }
+
+        .cell {
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .invalid { visibility: hidden; }
+        .hole { background: var(--hole-color); box-shadow: inset 0 4px 6px rgba(0,0,0,0.8); }
+
+        .peg {
+            width: 42px; height: 42px; border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #f5e0dc, var(--peg-color), #94e2d5);
+            cursor: grab;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+        .peg:active { cursor: grabbing; transform: scale(1.1); }
+
+        .controls { margin-top: 1rem; display: flex; gap: 15px; }
+        button {
+            background: #313244; color: white; border: none; padding: 12px 20px;
+            border-radius: 8px; cursor: pointer; font-size: 14px;
+        }
+        button:hover { background: #45475a; }
+
+        #message { margin-top: 15px; font-weight: bold; color: var(--accent); min-height: 1.2em; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Peg Solitaire</h1>
+        <div class="stats-container">
+            <div class="stat-item">
+                <span class="stat-label">Time</span>
+                <span id="timer">00:00</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Pegs</span>
+                <span id="peg-count">32</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="board-wrapper">
+        <div class="board-container" id="container">
+            <div class="board" id="game-board"></div>
+        </div>
+    </div>
+
+    <div id="message"></div>
+
+    <div class="controls">
+        <button onclick="rotateBoard(-90)">↺ Rotate L</button>
+        <button onclick="resetGame()">Reset Game</button>
+        <button onclick="rotateBoard(90)">Rotate R ↻</button>
+    </div>
+
+    <script>
+        const INITIAL_STATE = [
+            [0, 0, 2, 2, 2, 0, 0], [0, 0, 2, 2, 2, 0, 0], [2, 2, 2, 2, 2, 2, 2],
+            [2, 2, 2, 1, 2, 2, 2], [2, 2, 2, 2, 2, 2, 2], [0, 0, 2, 2, 2, 0, 0], [0, 0, 2, 2, 2, 0, 0]
+        ];
+
+        let board = JSON.parse(JSON.stringify(INITIAL_STATE));
+        let rotation = 0;
+        let dragStart = null;
+        
+        // Timer Logic Variables
+        let startTime = null;
+        let timerInterval = null;
+        let gameActive = true;
+        let hasMoved = false;
+
+        function rotateBoard(deg) {
+            rotation += deg;
+            document.documentElement.style.setProperty('--rotation', rotation + 'deg');
+        }
+
+        function updateTimer() {
+            if (!startTime) return;
+            const now = new Date();
+            const diff = Math.floor((now - startTime) / 1000);
+            const mins = Math.floor(diff / 60).toString().padStart(2, '0');
+            const secs = (diff % 60).toString().padStart(2, '0');
+            document.getElementById('timer').innerText = `${mins}:${secs}`;
+        }
+
+        function render() {
+            const boardEl = document.getElementById('game-board');
+            boardEl.innerHTML = '';
+            let pegs = 0;
+
+            board.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    const div = document.createElement('div');
+                    div.className = 'cell ' + (cell === 0 ? 'invalid' : 'hole');
+                    if (cell === 2) {
+                        pegs++;
+                        const peg = document.createElement('div');
+                        peg.className = 'peg';
+                        if (gameActive) peg.onpointerdown = (e) => handleDragStart(e, r, c);
+                        div.appendChild(peg);
+                    }
+                    boardEl.appendChild(div);
+                });
+            });
+            document.getElementById('peg-count').innerText = pegs;
+            return pegs;
+        }
+
+        function handleDragStart(e, r, c) {
+            dragStart = { x: e.clientX, y: e.clientY, r, c };
+            window.onpointerup = handleDragEnd;
+        }
+
+        function handleDragEnd(e) {
+            if (!dragStart) return;
+            const dx = e.clientX - dragStart.x;
+            const dy = e.clientY - dragStart.y;
+            const sensitivity = 30;
+
+            const angleRad = (-rotation * Math.PI) / 180;
+            const worldDx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
+            const worldDy = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
+
+            let dr = 0, dc = 0;
+            if (Math.abs(worldDx) > Math.abs(worldDy)) {
+                if (Math.abs(worldDx) > sensitivity) dc = worldDx > 0 ? 2 : -2;
+            } else {
+                if (Math.abs(worldDy) > sensitivity) dr = worldDy > 0 ? 2 : -2;
+            }
+
+            if (dr !== 0 || dc !== 0) attemptMove(dragStart.r, dragStart.c, dragStart.r + dr, dragStart.c + dc);
+            dragStart = null;
+            window.onpointerup = null;
+        }
+
+        function attemptMove(r1, c1, r2, c2) {
+            if (r2 < 0 || r2 >= 7 || c2 < 0 || c2 >= 7) return;
+            const midR = (r1 + r2) / 2, midC = (c1 + c2) / 2;
+
+            if (board[r2][c2] === 1 && board[midR][midC] === 2) {
+                // Start timer on first move
+                if (!hasMoved) {
+                    hasMoved = true;
+                    startTime = new Date();
+                    timerInterval = setInterval(updateTimer, 1000);
+                }
+
+                board[r1][c1] = 1;
+                board[midR][midC] = 1;
+                board[r2][c2] = 2;
+                const remaining = render();
+                checkGameOver(remaining);
+            }
+        }
+
+        function canMove() {
+            for (let r = 0; r < 7; r++) {
+                for (let c = 0; c < 7; c++) {
+                    if (board[r][c] !== 2) continue;
+                    const dirs = [[0,2], [0,-2], [2,0], [-2,0]];
+                    for (let [dr, dc] of dirs) {
+                        const nr = r + dr, nc = c + dc;
+                        const mr = r + dr/2, mc = c + dc/2;
+                        if (nr >= 0 && nr < 7 && nc >= 0 && nc < 7 && board[nr][nc] === 1 && board[mr][mc] === 2) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function checkGameOver(pegs) {
+            if (!canMove()) {
+                gameActive = false;
+                clearInterval(timerInterval);
+                const msg = pegs === 1 ? "MASTERPIECE! (1 peg)" : `Game Over: ${pegs} pegs left.`;
+                document.getElementById('message').innerText = msg;
+                render(); // Re-render to disable input
+            }
+        }
+
+        function resetGame() {
+            board = JSON.parse(JSON.stringify(INITIAL_STATE));
+            rotation = 0;
+            document.documentElement.style.setProperty('--rotation', '0deg');
+            gameActive = true;
+            hasMoved = false;
+            startTime = null;
+            clearInterval(timerInterval);
+            document.getElementById('timer').innerText = "00:00";
+            document.getElementById('message').innerText = "";
+            render();
+        }
+
+        render();
+    </script>
+</body>
+</html>
