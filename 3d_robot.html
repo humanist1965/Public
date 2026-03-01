@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Robot - 3D Magic Eye (Autostereogram)</title>
+    <style>
+        body { background-color: #1a1a1a; color: #eee; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
+        h1 { color: #fab387; margin-bottom: 10px; }
+        .controls { background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 8px; max-width: 600px; margin: 10px auto; border: 1px solid #333; }
+        p { max-width: 650px; margin: 10px auto; line-height: 1.6; color: #ccc; font-size: 0.95em; }
+        b { color: #fab387; }
+        canvas { display: block; margin: 20px auto; border: 10px solid #222; box-shadow: 0 10px 30px rgba(0,0,0,0.5); cursor: zoom-in; }
+    </style>
+</head>
+<body>
+    <h1>AI Robot (Hidden 3D View)</h1>
+    
+    <div class="controls">
+        <p><b>What you are looking for:</b> A stylized AI robot standing facing you. It has a head with antennae, a blocky torso, and two arms (one is reaching out toward you).</p>
+        <p><b>To see it:</b> Get close to the screen. Focus on a point *far behind* the monitor (look through it). Slowly back away without changing your focus. Wait for the patterns to 'snap' together.</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const width = 1000;
+        const height = 750;
+        const patternStripWidth = 100; // The primary repeating block width
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // --- 1. Generate the Complex Depth Map of the Robot ---
+        // Generates a grayscale image: White = Close, Black = Far
+        const depthCanvas = document.createElement('canvas');
+        const dCtx = depthCanvas.getContext('2d');
+        depthCanvas.width = width;
+        depthCanvas.height = height;
+
+        // Fill background with distant depth (almost black)
+        dCtx.fillStyle = 'rgb(10, 10, 10)'; 
+        dCtx.fillRect(0, 0, width, height);
+
+        // Define shapes for the robot topography
+        const cX = width / 2;
+        const cY = height / 2;
+
+        // A. Torso (Mid-distance)
+        dCtx.fillStyle = 'rgb(100, 100, 100)';
+        drawRoundedRect(dCtx, cX - 70, cY - 100, 140, 180, 20, true);
+
+        // B. Head (Closer)
+        dCtx.fillStyle = 'rgb(180, 180, 180)';
+        drawRoundedRect(dCtx, cX - 50, cY - 210, 100, 90, 20, true);
+        // Antennae
+        dCtx.strokeStyle = 'rgb(180, 180, 180)'; dCtx.lineWidth = 5;
+        dCtx.beginPath(); dCtx.moveTo(cX - 20, cY - 210); dCtx.lineTo(cX - 40, cY - 250); dCtx.stroke();
+        dCtx.beginPath(); dCtx.moveTo(cX + 20, cY - 210); dCtx.lineTo(cX + 40, cY - 250); dCtx.stroke();
+        dCtx.fillStyle = 'rgb(220, 220, 220)';
+        dCtx.beginPath(); dCtx.arc(cX - 40, cY - 250, 5, 0, Math.PI * 2); dCtx.fill();
+        dCtx.beginPath(); dCtx.arc(cX + 40, cY - 250, 5, 0, Math.PI * 2); dCtx.fill();
+
+        // C. Eyes (Brightest/Closest details)
+        dCtx.fillStyle = 'rgb(250, 250, 250)';
+        dCtx.beginPath(); dCtx.arc(cX - 20, cY - 170, 8, 0, Math.PI * 2); dCtx.fill();
+        dCtx.beginPath(); dCtx.arc(cX + 20, cY - 170, 8, 0, Math.PI * 2); dCtx.fill();
+
+        // D. Arms (Varying Depth)
+        // Left Arm (Standard distance)
+        dCtx.fillStyle = 'rgb(90, 90, 90)';
+        dCtx.fillRect(cX - 110, cY - 80, 40, 130);
+        // Right Arm (Reaching OUT toward viewer, very close/bright)
+        dCtx.fillStyle = 'rgb(230, 230, 230)';
+        dCtx.fillRect(cX + 70, cY - 80, 40, 130); // Upper arm
+        dCtx.fillStyle = 'rgb(255, 255, 255)'; // Hand/Forearm closest
+        dCtx.fillRect(cX + 70, cY + 10, 60, 100);
+
+        // --- 2. Create the Color Pattern Texture (Hidden Interface) ---
+        // Creates a seamless colorful pattern to hide the depth data
+        const patternCanvas = document.createElement('canvas');
+        const pCtx = patternCanvas.getContext('2d');
+        patternCanvas.width = patternStripWidth;
+        patternCanvas.height = height;
+
+        // Generate a random abstract, noisy texture
+        const textureImageData = pCtx.createImageData(patternStripWidth, height);
+        for (let i = 0; i < textureImageData.data.length; i += 4) {
+            const hue = Math.random() * 360; // Random Hue
+            const [r, g, b] = hslToRgb(hue, 0.6, 0.4); // Convert HSL to RGB
+            textureImageData.data[i] = r;     // R
+            textureImageData.data[i + 1] = g; // G
+            textureImageData.data[i + 2] = b; // B
+            textureImageData.data[i + 3] = 255; // Alpha
+        }
+        pCtx.putImageData(textureImageData, 0, 0);
+
+        // Optional: Add some subtle geometric structure to aid focus
+        pCtx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        for (let y = 0; y < height; y += 15) {
+            for (let x = 0; x < patternStripWidth; x += 15) {
+                if (Math.random() > 0.5) pCtx.fillRect(x, y, 8, 8);
+            }
+        }
+
+        // --- 3. Generate the Stereogram: The Core Magic ---
+        // Shifts the background color pattern based on the Depth Map
+        const resultImageData = ctx.createImageData(width, height);
+        const depthData = dCtx.getImageData(0, 0, width, height).data;
+        const patternData = pCtx.getImageData(0, 0, patternStripWidth, height).data;
+
+        for (let y = 0; y < height; y++) {
+            // Buffer to store calculated pixel values for this row
+            let rowPixels = new Uint8ClampedArray(width * 4);
+
+            for (let x = 0; x < width; x++) {
+                if (x < patternStripWidth) {
+                    // Leftmost strip: Simply copy the base pattern texture
+                    const patternIndex = (y * patternStripWidth + x) * 4;
+                    copyPixel(patternData, patternIndex, rowPixels, x * 4);
+                } else {
+                    // Echo/Repeat logic: Look back 'patternStripWidth'
+                    // Apply a 'depth shift' based on the grayscale value in the Depth Map
+                    const depthMapIndex = (y * width + x) * 4;
+                    const depthValue = depthData[depthMapIndex]; // 0 (Black/Far) to 255 (White/Close)
+                    
+                    // Depth shift: Closest pixels (255) shift 35px, farthest shift 0.
+                    const shiftAmount = Math.round((depthValue / 255) * 35);
+                    const lookBackDistance = patternStripWidth - shiftAmount;
+                    
+                    // Correct for boundary issues when we shift too far
+                    let sourceX = x - lookBackDistance;
+                    if (sourceX < 0) sourceX += patternStripWidth; 
+
+                    copyPixel(rowPixels, sourceX * 4, rowPixels, x * 4);
+                }
+            }
+
+            // Write the calculated row back to the final image data buffer
+            for (let x = 0; x < width; x++) {
+                const targetIdx = (y * width + x) * 4;
+                copyPixel(rowPixels, x * 4, resultImageData.data, targetIdx);
+            }
+        }
+
+        // --- 4. Render the final Image ---
+        ctx.putImageData(resultImageData, 0, 0);
+
+        // Helper functions
+        function copyPixel(source, srcIdx, target, targetIdx) {
+            target[targetIdx] = source[srcIdx];         // R
+            target[targetIdx + 1] = source[srcIdx + 1]; // G
+            target[targetIdx + 2] = source[srcIdx + 2]; // B
+            target[targetIdx + 3] = source[srcIdx + 3]; // A
+        }
+
+        // Modern Rounded Rect tool
+        function drawRoundedRect(ctx, x, y, width, height, radius, fill) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            if (fill) ctx.fill(); else ctx.stroke();
+        }
+
+        // Simple HSL to RGB conversion for pattern creation
+        function hslToRgb(h, s, l) {
+            let r, g, b;
+            if (s === 0) { r = g = b = l; } else {
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                const hue2rgb = (t) => {
+                    if (t < 0) t += 1; if (t > 1) t -= 1;
+                    if (t < 1 / 6) return p + (q - p) * 6 * t;
+                    if (t < 1 / 2) return q;
+                    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                    return p;
+                };
+                r = hue2rgb(h / 360 + 1 / 3);
+                g = hue2rgb(h / 360);
+                b = hue2rgb(h / 360 - 1 / 3);
+            }
+            return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+        }
+    </script>
+</body>
+</html>
