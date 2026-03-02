@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now v1.8</title>
+    <title>Squeeze Now v1.9</title>
     <style>
         :root {
             --primary-blue: #006699;
             --primary-orange: #f37021;
+            --off-white: #f0f0f0;
         }
 
         body {
@@ -22,14 +23,7 @@
             user-select: none;
         }
 
-        .header { 
-            width: 100%; 
-            padding: 15px 0; 
-            text-align: center; 
-            font-weight: bold; 
-            font-size: 1.2rem; 
-            border-bottom: 1px solid #eee;
-        }
+        .header { width: 100%; padding: 15px 0; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #eee; }
 
         .tabs { display: flex; width: 100%; background: #e0e0e0; z-index: 10; }
         .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #555; font-weight: 500; }
@@ -41,71 +35,38 @@
 
         /* TIMER BOX */
         .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; z-index: 5; }
-        
-        /* Fixed Clockwise: Start at 12:00 */
         svg { transform: rotate(-90deg); } 
-
         .base-circle { fill: none; stroke: #eee; stroke-width: 32; }
-        
-        .progress-segment {
-            fill: none;
-            stroke-width: 33; /* Slightly thicker to cover background gaps */
-            stroke-dasharray: 660; 
-            stroke-dashoffset: 660; 
-            transition: stroke-dashoffset 0.1s linear;
-        }
+        .progress-segment { fill: none; stroke-width: 33; stroke-dasharray: 660; stroke-dashoffset: 660; transition: stroke-dashoffset 0.1s linear; }
 
-        /* Quick Mode Background Segments */
-        #quickSegments { display: none; }
+        .counter-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8rem; font-weight: 800; color: #111; }
 
-        .counter-text { 
-            position: absolute; top: 50%; left: 50%; 
-            transform: translate(-50%, -50%); 
-            font-size: 1.8rem; font-weight: 800; color: #111; 
-        }
-
-        #instruction { 
-            margin-top: 35px; font-size: 2.2rem; font-weight: bold; 
-            color: var(--primary-orange); text-align: center; height: 1.2em; 
-        }
+        #instruction { margin-top: 35px; font-size: 2.2rem; font-weight: bold; color: var(--primary-orange); text-align: center; height: 1.2em; }
 
         /* DROPLET TRACKING */
-        .viewport-track {
-            position: absolute;
-            top: 450px; 
-            bottom: 120px; 
-            width: 100%;
-            pointer-events: none;
-        }
-
+        .viewport-track { position: absolute; top: 450px; bottom: 120px; width: 100%; pointer-events: none; }
         #droplet {
-            position: absolute;
-            left: 50%;
-            bottom: 0%; 
-            width: 60px;
-            height: 85px;
-            margin-left: -30px; 
+            position: absolute; left: 50%; bottom: 0%; width: 60px; height: 85px; margin-left: -30px; 
             background-color: var(--primary-orange);
             clip-path: path('M30 0 C15 40 0 55 0 75 L60 75 C60 55 45 40 30 0 Z');
             transition: bottom 0.1s linear, background-color 0.4s;
         }
 
-        .footer { 
-            width: 100%; 
-            padding: 20px 0 40px; 
-            display: flex; 
-            justify-content: space-evenly; 
-            background: white;
-            z-index: 10;
-            margin-top: auto;
-        }
-        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; }
-        .btn-play { background: #23315a; color: white; }
+        /* FOOTER & BUTTON STATES */
+        .footer { width: 100%; padding: 20px 0 40px; display: flex; justify-content: space-evenly; background: white; z-index: 10; margin-top: auto; }
+        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: var(--off-white); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .btn svg { transform: none; width: 24px; height: 24px; fill: #666; }
+        
+        /* Active Toggled State */
+        .btn.enabled { background: #d0e0ff; }
+        .btn.enabled svg { fill: var(--primary-blue); }
+
+        .btn-play { background: #23315a; color: white; font-size: 1.4rem; }
     </style>
 </head>
 <body>
 
-    <div class="header">squeeze now v1.8</div>
+    <div class="header">squeeze now v1.9</div>
 
     <div class="tabs">
         <div class="tab active" id="slowTab" onclick="updateMode('slow')">slow</div>
@@ -114,13 +75,11 @@
     </div>
 
     <div class="timer-container">
-        <svg width="260" height="260" id="timerSvg">
+        <svg width="260" height="260">
             <circle class="base-circle" cx="130" cy="130" r="105"></circle>
-            <g id="quickSegments"></g>
-            
+            <g id="quickSegments" style="display:none;"></g>
             <circle id="blueProgress" class="progress-segment" cx="130" cy="130" r="105" stroke="#006699"></circle>
             <circle id="orangeProgress" class="progress-segment" cx="130" cy="130" r="105" stroke="#f37021"></circle>
-            
             <circle id="quickWipe" class="progress-segment" cx="130" cy="130" r="105" stroke="#eee" style="display:none;"></circle>
         </svg>
         <div class="counter-text" id="counter">1 of 10</div>
@@ -134,8 +93,12 @@
 
     <div class="footer">
         <button class="btn" onclick="killTimer()">↺</button>
-        <button class="btn">📳</button>
-        <button class="btn">🔇</button>
+        <button class="btn" id="vibeBtn" onclick="toggleVibrate()">
+            <svg viewBox="0 0 24 24"><path d="M16 3H8C6.9 3 6 3.9 6 5V19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V5C18 3.9 17.1 3 16 3M16 19H8V5H16V19M7.5 7.5V16.5M4.5 9V15M19.5 9V15M16.5 7.5V16.5"/></svg>
+        </button>
+        <button class="btn" id="soundBtn" onclick="toggleSound()">
+            <svg viewBox="0 0 24 24"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.02C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg>
+        </button>
         <button class="btn btn-play" id="playBtn" onclick="togglePlay()">▶</button>
     </div>
 
@@ -144,6 +107,9 @@
         const CIRCUM = 660;
 
         let mode = 'slow', isRunning = false, currentRep = 1, timer = null, elapsed = 0;
+        let isVibrateEnabled = false;
+        let isSoundEnabled = false;
+        let lastQuickSecond = -1;
 
         const ui = {
             orange: document.getElementById('orangeProgress'),
@@ -153,23 +119,52 @@
             counter: document.getElementById('counter'),
             instr: document.getElementById('instruction'),
             drop: document.getElementById('droplet'),
-            play: document.getElementById('playBtn')
+            play: document.getElementById('playBtn'),
+            vibeBtn: document.getElementById('vibeBtn'),
+            soundBtn: document.getElementById('soundBtn')
         };
 
-        // Create 20 static segments for Quick Mode
+        // --- NEW: Audio Engine ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playChime() {
+            if (!isSoundEnabled) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(550, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function triggerFeedback() {
+            if (isVibrateEnabled && navigator.vibrate) navigator.vibrate(100);
+            playChime();
+        }
+
+        // --- Toggle Handlers ---
+        function toggleVibrate() {
+            isVibrateEnabled = !isVibrateEnabled;
+            ui.vibeBtn.classList.toggle('enabled', isVibrateEnabled);
+        }
+
+        function toggleSound() {
+            isSoundEnabled = !isSoundEnabled;
+            ui.soundBtn.classList.toggle('enabled', isSoundEnabled);
+            if (isSoundEnabled && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
         function initQuickUI() {
             ui.quickG.innerHTML = '';
             for (let i = 0; i < 20; i++) {
                 const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                circle.setAttribute("cx", 130);
-                circle.setAttribute("cy", 130);
-                circle.setAttribute("r", 105);
-                circle.setAttribute("fill", "none");
-                circle.setAttribute("stroke-width", 32);
+                circle.setAttribute("cx", 130); circle.setAttribute("cy", 130); circle.setAttribute("r", 105);
+                circle.setAttribute("fill", "none"); circle.setAttribute("stroke-width", 32);
                 circle.setAttribute("stroke", i % 2 === 0 ? COLORS.orange : COLORS.blue);
-                // Each segment is 1/20th of CIRCUM (33 units)
                 circle.setAttribute("stroke-dasharray", `33 ${CIRCUM - 33}`);
-                // Rotate each segment into place (18 degrees each)
                 circle.setAttribute("transform", `rotate(${i * 18}, 130, 130)`);
                 ui.quickG.appendChild(circle);
             }
@@ -177,12 +172,9 @@
         initQuickUI();
 
         function updateMode(m) { 
-            mode = m; 
-            killTimer();
+            mode = m; killTimer();
             document.getElementById('slowTab').className = m === 'slow' ? 'tab active' : 'tab';
             document.getElementById('quickTab').className = m === 'quick' ? 'tab active' : 'tab';
-            
-            // Toggle UI elements visibility
             ui.quickG.style.display = (m === 'quick') ? 'block' : 'none';
             ui.quickWipe.style.display = (m === 'quick') ? 'block' : 'none';
             ui.orange.style.display = (m === 'slow') ? 'block' : 'none';
@@ -190,6 +182,7 @@
         }
 
         function togglePlay() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             isRunning = !isRunning;
             ui.play.innerText = isRunning ? "II" : "▶";
             if (isRunning && !timer) runSession();
@@ -197,96 +190,64 @@
 
         function killTimer() {
             clearInterval(timer); timer = null; isRunning = false; 
-            currentRep = 1; elapsed = 0;
-            ui.play.innerText = "▶";
-            draw(0, 0);
-            ui.instr.innerText = "ready?";
-            ui.instr.style.color = COLORS.orange;
-            ui.drop.style.bottom = "0%";
-            ui.drop.style.backgroundColor = COLORS.orange;
+            currentRep = 1; elapsed = 0; lastQuickSecond = -1;
+            ui.play.innerText = "▶"; draw(0, 0);
+            ui.instr.innerText = "ready?"; ui.instr.style.color = COLORS.orange;
+            ui.drop.style.bottom = "0%"; ui.drop.style.backgroundColor = COLORS.orange;
         }
 
         function runSession() {
-            if (currentRep > 10 && mode === 'slow') { alert("Slow Session Complete!"); killTimer(); return; }
-
             elapsed = 0;
-            if (timer) clearInterval(timer);
-
+            triggerFeedback(); // Initial start chime
             timer = setInterval(() => {
                 if (!isRunning) return;
                 elapsed += 0.1;
-
-                if (mode === 'slow') {
-                    handleSlowMode();
-                } else {
-                    handleQuickMode();
-                }
+                if (mode === 'slow') handleSlowMode(); else handleQuickMode();
             }, 100);
         }
 
         function handleSlowMode() {
-            const squeezeTime = 10;
-            const breathTime = 4;
-            const total = 14;
-
-            if (elapsed <= squeezeTime) {
-                ui.instr.innerText = "squeeze";
-                ui.instr.style.color = COLORS.orange;
+            const squeeze = 10, breath = 4, total = 14;
+            if (elapsed <= squeeze) {
+                ui.instr.innerText = "squeeze"; ui.instr.style.color = COLORS.orange;
                 ui.drop.style.backgroundColor = COLORS.orange;
-                ui.drop.style.bottom = (elapsed / squeezeTime * 100) + "%";
+                ui.drop.style.bottom = (elapsed / squeeze * 100) + "%";
                 draw(elapsed / total, 0);
             } else if (elapsed <= total) {
-                ui.instr.innerText = "breath";
-                ui.instr.style.color = COLORS.blue;
+                if (ui.instr.innerText === "squeeze") triggerFeedback(); // Transition to breath
+                ui.instr.innerText = "breath"; ui.instr.style.color = COLORS.blue;
                 ui.drop.style.backgroundColor = COLORS.blue;
-                ui.drop.style.bottom = (100 - ((elapsed - squeezeTime) / breathTime * 100)) + "%";
-                draw(squeezeTime / total, (elapsed - squeezeTime) / total);
+                ui.drop.style.bottom = (100 - ((elapsed - squeeze) / breath * 100)) + "%";
+                draw(squeeze / total, (elapsed - squeeze) / total);
             } else {
-                currentRep++;
-                elapsed = 0;
-                if (currentRep > 10) { alert("Slow Session Complete!"); killTimer(); }
+                currentRep++; elapsed = 0;
+                if (currentRep > 10) { alert("Done!"); killTimer(); } else { triggerFeedback(); }
             }
         }
 
         function handleQuickMode() {
-            const totalCycle = 20; // 10 pairs of 1s squeeze + 1s breath
-            if (elapsed > totalCycle) {
-                alert("Quick Session Complete!");
-                killTimer();
-                return;
+            const totalCycle = 20;
+            if (elapsed > totalCycle) { alert("Quick Done!"); killTimer(); return; }
+            const curSec = Math.floor(elapsed);
+            if (curSec !== lastQuickSecond) {
+                lastQuickSecond = curSec;
+                triggerFeedback(); // Every 1 second
             }
-
-            const currentSecond = Math.floor(elapsed);
-            const isSqueeze = (currentSecond % 2 === 0);
-            const subProgress = elapsed % 1; 
-
+            const isSqueeze = (curSec % 2 === 0);
+            const sub = elapsed % 1;
             ui.instr.innerText = isSqueeze ? "squeeze" : "breath";
             ui.instr.style.color = isSqueeze ? COLORS.orange : COLORS.blue;
             ui.drop.style.backgroundColor = isSqueeze ? COLORS.orange : COLORS.blue;
-
-            // Droplet Rise (Squeeze) and Fall (Breath) every 1 second
-            if (isSqueeze) {
-                ui.drop.style.bottom = (subProgress * 100) + "%";
-            } else {
-                ui.drop.style.bottom = (100 - (subProgress * 100)) + "%";
-            }
-
-            // Circle logic: Wipe reveals the 20 background segments
-            // Wipe offset 0 = Everything covered (Grey), 660 = Everything revealed
-            const progress = elapsed / totalCycle;
-            ui.quickWipe.style.strokeDashoffset = (progress * CIRCUM);
-            
-            // Rep count for Quick mode: updates every 2 seconds
-            ui.counter.innerText = (Math.floor(currentSecond / 2) + 1) + " of 10";
+            ui.drop.style.bottom = isSqueeze ? (sub * 100) + "%" : (100 - (sub * 100)) + "%";
+            ui.quickWipe.style.strokeDashoffset = (elapsed / totalCycle * CIRCUM);
+            ui.counter.innerText = (Math.floor(curSec / 2) + 1) + " of 10";
         }
 
-        function draw(orangeRatio, blueRatio) {
-            ui.orange.style.strokeDashoffset = CIRCUM - (orangeRatio * CIRCUM);
-            ui.blue.style.strokeDashoffset = CIRCUM - ((orangeRatio + blueRatio) * CIRCUM);
+        function draw(o, b) {
+            ui.orange.style.strokeDashoffset = CIRCUM - (o * CIRCUM);
+            ui.blue.style.strokeDashoffset = CIRCUM - ((o + b) * CIRCUM);
             ui.counter.innerText = `${currentRep} of 10`;
         }
-
-        // Initialize display
         updateMode('slow');
     </script>
 </body>
