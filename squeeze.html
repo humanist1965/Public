@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now - Clockwise Edition</title>
+    <title>Squeeze Now - Precision Timer</title>
     <style>
         :root {
             --primary-blue: #006699;
             --primary-orange: #f37021;
+            --bg-light: #f4f4f4;
         }
 
         body {
             margin: 0;
-            font-family: -apple-system, sans-serif;
+            font-family: -apple-system, system-ui, sans-serif;
             background-color: white;
             display: flex;
             flex-direction: column;
@@ -21,163 +22,185 @@
             overflow: hidden;
         }
 
-        .header { width: 100%; padding: 15px 0; text-align: center; font-weight: bold; }
+        /* Header & Tabs */
+        .header { width: 100%; padding: 15px 0; text-align: center; font-weight: bold; font-size: 1.2rem; position: relative; }
         .tabs { display: flex; width: 100%; background: #e0e0e0; }
-        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #666; }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #555; font-weight: 500; transition: 0.3s; }
         .tab.active { 
             background-color: var(--primary-blue); 
             color: white; 
-            clip-path: polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%);
+            clip-path: polygon(0% 0%, 92% 0%, 100% 50%, 92% 100%, 0% 100%);
         }
 
-        /* Timer Circle */
-        .timer-container { margin-top: 50px; position: relative; width: 250px; height: 250px; }
+        /* The Clockwise SVG */
+        .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; }
         
-        /* Container rotates so 0% is at the top, but children stay clockwise */
-        svg { transform: rotate(-90deg); scale: 1 -1; } 
+        /* The magic for clockwise: Rotate to 12 o'clock and flip horizontally */
+        svg { transform: rotate(-90deg) scaleX(-1); } 
 
-        .base-circle { fill: none; stroke: #eee; stroke-width: 30; }
-        .progress-circle { 
-            fill: none; 
-            stroke-width: 30; 
-            stroke-dasharray: 660; 
-            stroke-dashoffset: 660; 
-            transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
+        .base-circle { fill: none; stroke: #eee; stroke-width: 32; }
+        
+        .progress-segment {
+            fill: none;
+            stroke-width: 32;
+            stroke-dasharray: 660; /* Circumference */
+            stroke-dashoffset: 660; /* Hidden by default */
+            transition: stroke-dashoffset 0.05s linear;
         }
 
-        .counter-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5rem; font-weight: bold; }
+        .counter-text { 
+            position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); 
+            font-size: 1.6rem; font-weight: 800; color: #111; 
+        }
 
-        #instruction { margin-top: 40px; font-size: 1.8rem; font-weight: bold; height: 1.5em; text-align: center; }
+        #instruction { 
+            margin-top: 35px; font-size: 2rem; font-weight: bold; 
+            color: var(--primary-orange); text-align: center; height: 1.2em; 
+        }
 
-        .icon-area { flex-grow: 1; width: 100%; position: relative; display: flex; justify-content: center; }
+        /* Droplet Animation */
+        .icon-track { flex-grow: 1; width: 100%; position: relative; display: flex; justify-content: center; }
         #droplet {
-            position: absolute; bottom: 80px; width: 50px; height: 70px;
+            position: absolute; bottom: 60px; width: 55px; height: 75px;
             background-color: var(--primary-orange);
-            clip-path: path('M25 0 C10 30 0 45 0 60 A25 25 0 1 0 50 60 C50 45 40 30 25 0');
-            transition: transform 1s ease-in-out, background-color 0.3s;
+            clip-path: path('M27 0 C10 35 0 50 0 65 A27 27 0 1 0 54 65 C54 50 44 35 27 0');
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s;
         }
 
-        .footer { width: 100%; padding: 20px 0 40px; display: flex; justify-content: space-evenly; }
-        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #eee; cursor: pointer; font-size: 1.2rem; }
-        .btn-main { background: #2b3a67; color: white; }
+        /* Footer Controls */
+        .footer { width: 100%; padding: 20px 0 45px; display: flex; justify-content: space-evenly; }
+        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #eee; cursor: pointer; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn-play { background: #23315a; color: white; }
     </style>
 </head>
 <body>
 
-    <div class="header">squeeze now</div>
+    <div class="header">squeeze now <span style="position:absolute; right:20px; font-weight:normal; opacity:0.5">?</span></div>
 
     <div class="tabs">
-        <div class="tab active" id="slowTab" onclick="setMode('slow')">slow</div>
-        <div class="tab" id="quickTab" onclick="setMode('quick')">quick</div>
+        <div class="tab active" id="slowTab" onclick="updateMode('slow')">slow</div>
+        <div class="tab" id="quickTab" onclick="updateMode('quick')">quick</div>
         <div class="tab">finish</div>
     </div>
 
     <div class="timer-container">
-        <svg width="250" height="250">
-            <circle class="base-circle" cx="125" cy="125" r="105"></circle>
-            <circle id="progress" class="progress-circle" cx="125" cy="125" r="105"></circle>
+        <svg width="260" height="260">
+            <circle class="base-circle" cx="130" cy="130" r="105"></circle>
+            <circle id="blueProgress" class="progress-segment" cx="130" cy="130" r="105" stroke="#006699"></circle>
+            <circle id="orangeProgress" class="progress-segment" cx="130" cy="130" r="105" stroke="#f37021"></circle>
         </svg>
         <div class="counter-text" id="counter">1 of 10</div>
     </div>
 
     <div id="instruction">ready?</div>
 
-    <div class="icon-area">
+    <div class="icon-track">
         <div id="droplet"></div>
     </div>
 
     <div class="footer">
-        <button class="btn" onclick="appReset()">↺</button>
+        <button class="btn" onclick="killTimer()">↺</button>
         <button class="btn">📳</button>
         <button class="btn">🔇</button>
-        <button class="btn btn-main" id="playBtn" onclick="togglePlay()">▶</button>
+        <button class="btn btn-play" id="playBtn" onclick="togglePlay()">▶</button>
     </div>
 
     <script>
         const COLORS = { orange: "#f37021", blue: "#006699" };
-        let mode = 'slow', isRunning = false, rep = 1, timer = null, timeLeft = 0, total = 0;
+        const CIRCUM = 660;
 
-        const el = {
-            progress: document.getElementById('progress'),
+        let mode = 'slow', isRunning = false, currentRep = 1, timer = null;
+        let elapsed = 0;
+
+        const ui = {
+            orange: document.getElementById('orangeProgress'),
+            blue: document.getElementById('blueProgress'),
             counter: document.getElementById('counter'),
             instr: document.getElementById('instruction'),
             drop: document.getElementById('droplet'),
             play: document.getElementById('playBtn')
         };
 
-        function setMode(m) { 
+        function updateMode(m) { 
             mode = m; 
-            appReset(); 
-            document.getElementById('slowTab').className = m === 'slow' ? 'tab active' : 'tab'; 
-            document.getElementById('quickTab').className = m === 'quick' ? 'tab active' : 'tab'; 
+            killTimer();
+            document.getElementById('slowTab').className = m === 'slow' ? 'tab active' : 'tab';
+            document.getElementById('quickTab').className = m === 'quick' ? 'tab active' : 'tab';
         }
 
-        function togglePlay() { 
-            isRunning = !isRunning; 
-            el.play.innerText = isRunning ? "II" : "▶";
-            if (isRunning && !timer) runCycle(); 
+        function togglePlay() {
+            isRunning = !isRunning;
+            ui.play.innerText = isRunning ? "II" : "▶";
+            if (isRunning && !timer) runSession();
         }
 
-        function appReset() {
-            clearInterval(timer); timer = null; isRunning = false; rep = 1;
-            el.play.innerText = "▶"; 
-            updateProgress(0); // Reset to empty circle
-            el.instr.innerText = "ready?"; 
-            el.instr.style.color = COLORS.orange;
-            el.drop.style.transform = "translateY(0)"; 
-            el.drop.style.backgroundColor = COLORS.orange;
+        function killTimer() {
+            clearInterval(timer); timer = null; isRunning = false; 
+            currentRep = 1; elapsed = 0;
+            ui.play.innerText = "▶";
+            draw(0, 0);
+            ui.instr.innerText = "ready?";
+            ui.instr.style.color = COLORS.orange;
+            ui.drop.style.transform = "translateY(0)";
+            ui.drop.style.backgroundColor = COLORS.orange;
         }
 
-        function runCycle() {
-            if (rep > 10) { alert("Exercise Complete!"); appReset(); return; }
+        function runSession() {
+            if (currentRep > 10) { alert("Session Finished!"); killTimer(); return; }
+
+            const squeezeTime = (mode === 'slow') ? 10 : 1;
+            const breathTime = (mode === 'slow') ? 4 : 1;
+            const totalCycle = squeezeTime + breathTime;
             
-            const squeezeDuration = (mode === 'slow') ? 10 : 1;
-            const restDuration = (mode === 'slow') ? 4 : 1;
-            const fullCircleTime = squeezeDuration + restDuration;
-
-            // Start Phase 1: Squeeze (Orange)
-            startPhase(squeezeDuration, fullCircleTime, 0, "squeeze", COLORS.orange, -200, () => {
-                // Start Phase 2: Relax (Blue)
-                startPhase(restDuration, fullCircleTime, squeezeDuration, "breath", COLORS.blue, 0, () => {
-                    rep++; 
-                    runCycle();
-                });
-            });
-        }
-
-        function startPhase(phaseSec, circleTotal, startOffset, txt, col, y, cb) {
-            let phaseElapsed = 0;
-            el.instr.innerText = txt; 
-            el.instr.style.color = col;
-            el.drop.style.backgroundColor = col; 
-            el.progress.style.stroke = col;
-            el.drop.style.transform = `translateY(${y}px)`;
+            elapsed = 0;
+            ui.instr.innerText = "squeeze";
+            ui.instr.style.color = COLORS.orange;
+            ui.drop.style.backgroundColor = COLORS.orange;
+            ui.drop.style.transform = "translateY(-180px)";
 
             timer = setInterval(() => {
                 if (!isRunning) return;
 
-                phaseElapsed += 0.05;
-                const totalElapsed = startOffset + phaseElapsed;
+                elapsed += 0.05;
                 
-                updateProgress(totalElapsed / circleTotal);
-
-                if (phaseElapsed >= phaseSec) { 
-                    clearInterval(timer); 
-                    timer = null; 
-                    cb(); 
+                // Determine phase
+                if (elapsed <= squeezeTime) {
+                    // Phase: Squeeze (Orange)
+                    draw(elapsed / totalCycle, 0);
+                } else if (elapsed <= totalCycle) {
+                    // Phase: Breath (Blue)
+                    ui.instr.innerText = "breath";
+                    ui.instr.style.color = COLORS.blue;
+                    ui.drop.style.backgroundColor = COLORS.blue;
+                    ui.drop.style.transform = "translateY(0)";
+                    
+                    const squeezeRatio = squeezeTime / totalCycle;
+                    const breathRatio = (elapsed - squeezeTime) / totalCycle;
+                    draw(squeezeRatio, breathRatio);
+                } else {
+                    // Cycle Complete
+                    clearInterval(timer);
+                    timer = null;
+                    currentRep++;
+                    runSession();
                 }
             }, 50);
         }
 
-        function updateProgress(ratio) {
+        function draw(orangeRatio, blueRatio) {
             // Clockwise logic: offset 660 is empty, 0 is full.
-            const offset = 660 - (ratio * 660);
-            el.progress.style.strokeDashoffset = offset;
-            el.counter.innerText = `${rep} of 10`;
+            ui.orange.style.strokeDashoffset = CIRCUM - (orangeRatio * CIRCUM);
+            
+            // Blue segment starts where orange ends
+            const blueOffset = CIRCUM - ((orangeRatio + blueRatio) * CIRCUM);
+            ui.blue.style.strokeDashoffset = blueOffset;
+            
+            ui.counter.innerText = `${currentRep} of 10`;
         }
 
-        // Initialize state
-        updateProgress(0);
+        // Init
+        draw(0, 0);
     </script>
 </body>
 </html>
