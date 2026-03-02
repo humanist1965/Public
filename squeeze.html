@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now - Precision Timer</title>
+    <title>Squeeze Now v1.4</title>
     <style>
         :root {
             --primary-blue: #006699;
             --primary-orange: #f37021;
-            --bg-light: #f4f4f4;
+            --bg-gray: #f8f9fa;
         }
 
         body {
@@ -20,22 +20,32 @@
             align-items: center;
             height: 100vh;
             overflow: hidden;
+            user-select: none;
         }
 
-        /* Header & Tabs */
-        .header { width: 100%; padding: 15px 0; text-align: center; font-weight: bold; font-size: 1.2rem; position: relative; }
+        /* Title with Version */
+        .header { 
+            width: 100%; 
+            padding: 15px 0; 
+            text-align: center; 
+            font-weight: bold; 
+            font-size: 1.2rem; 
+            position: relative; 
+            border-bottom: 1px solid #eee;
+        }
+
         .tabs { display: flex; width: 100%; background: #e0e0e0; }
-        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #555; font-weight: 500; transition: 0.3s; }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #555; font-weight: 500; }
         .tab.active { 
             background-color: var(--primary-blue); 
             color: white; 
             clip-path: polygon(0% 0%, 92% 0%, 100% 50%, 92% 100%, 0% 100%);
         }
 
-        /* The Clockwise SVG */
+        /* The Clockwise SVG Logic */
         .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; }
         
-        /* The magic for clockwise: Rotate to 12 o'clock and flip horizontally */
+        /* scaleX(-1) and rotate(-90deg) ensures 0 is at top and moves right (clockwise) */
         svg { transform: rotate(-90deg) scaleX(-1); } 
 
         .base-circle { fill: none; stroke: #eee; stroke-width: 32; }
@@ -43,19 +53,20 @@
         .progress-segment {
             fill: none;
             stroke-width: 32;
-            stroke-dasharray: 660; /* Circumference */
-            stroke-dashoffset: 660; /* Hidden by default */
+            stroke-dasharray: 660; 
+            stroke-dashoffset: 660; 
+            stroke-linecap: butt;
             transition: stroke-dashoffset 0.05s linear;
         }
 
         .counter-text { 
             position: absolute; top: 50%; left: 50%; 
             transform: translate(-50%, -50%); 
-            font-size: 1.6rem; font-weight: 800; color: #111; 
+            font-size: 1.8rem; font-weight: 800; color: #111; 
         }
 
         #instruction { 
-            margin-top: 35px; font-size: 2rem; font-weight: bold; 
+            margin-top: 35px; font-size: 2.2rem; font-weight: bold; 
             color: var(--primary-orange); text-align: center; height: 1.2em; 
         }
 
@@ -70,13 +81,13 @@
 
         /* Footer Controls */
         .footer { width: 100%; padding: 20px 0 45px; display: flex; justify-content: space-evenly; }
-        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #eee; cursor: pointer; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; }
         .btn-play { background: #23315a; color: white; }
     </style>
 </head>
 <body>
 
-    <div class="header">squeeze now <span style="position:absolute; right:20px; font-weight:normal; opacity:0.5">?</span></div>
+    <div class="header">squeeze now v1.4 <span style="position:absolute; right:20px; font-weight:normal; opacity:0.4">?</span></div>
 
     <div class="tabs">
         <div class="tab active" id="slowTab" onclick="updateMode('slow')">slow</div>
@@ -110,8 +121,7 @@
         const COLORS = { orange: "#f37021", blue: "#006699" };
         const CIRCUM = 660;
 
-        let mode = 'slow', isRunning = false, currentRep = 1, timer = null;
-        let elapsed = 0;
+        let mode = 'slow', isRunning = false, currentRep = 1, timer = null, elapsed = 0;
 
         const ui = {
             orange: document.getElementById('orangeProgress'),
@@ -147,7 +157,7 @@
         }
 
         function runSession() {
-            if (currentRep > 10) { alert("Session Finished!"); killTimer(); return; }
+            if (currentRep > 10) { alert("Session Complete!"); killTimer(); return; }
 
             const squeezeTime = (mode === 'slow') ? 10 : 1;
             const breathTime = (mode === 'slow') ? 4 : 1;
@@ -157,31 +167,25 @@
             ui.instr.innerText = "squeeze";
             ui.instr.style.color = COLORS.orange;
             ui.drop.style.backgroundColor = COLORS.orange;
-            ui.drop.style.transform = "translateY(-180px)";
+            ui.drop.style.transform = "translateY(-200px)";
 
             timer = setInterval(() => {
                 if (!isRunning) return;
-
                 elapsed += 0.05;
                 
-                // Determine phase
                 if (elapsed <= squeezeTime) {
-                    // Phase: Squeeze (Orange)
                     draw(elapsed / totalCycle, 0);
                 } else if (elapsed <= totalCycle) {
-                    // Phase: Breath (Blue)
                     ui.instr.innerText = "breath";
                     ui.instr.style.color = COLORS.blue;
                     ui.drop.style.backgroundColor = COLORS.blue;
                     ui.drop.style.transform = "translateY(0)";
                     
-                    const squeezeRatio = squeezeTime / totalCycle;
+                    const orangeRatio = squeezeTime / totalCycle;
                     const breathRatio = (elapsed - squeezeTime) / totalCycle;
-                    draw(squeezeRatio, breathRatio);
+                    draw(orangeRatio, breathRatio);
                 } else {
-                    // Cycle Complete
-                    clearInterval(timer);
-                    timer = null;
+                    clearInterval(timer); timer = null;
                     currentRep++;
                     runSession();
                 }
@@ -189,17 +193,16 @@
         }
 
         function draw(orangeRatio, blueRatio) {
-            // Clockwise logic: offset 660 is empty, 0 is full.
+            // Orange fills clockwise from 0
             ui.orange.style.strokeDashoffset = CIRCUM - (orangeRatio * CIRCUM);
             
-            // Blue segment starts where orange ends
-            const blueOffset = CIRCUM - ((orangeRatio + blueRatio) * CIRCUM);
-            ui.blue.style.strokeDashoffset = blueOffset;
+            // Blue fills starting from the end of orange
+            const totalRatio = orangeRatio + blueRatio;
+            ui.blue.style.strokeDashoffset = CIRCUM - (totalRatio * CIRCUM);
             
             ui.counter.innerText = `${currentRep} of 10`;
         }
 
-        // Init
         draw(0, 0);
     </script>
 </body>
