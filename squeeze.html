@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now - Pelvic Trainer v0.3</title>
+    <title>Squeeze Now - Clockwise Edition</title>
     <style>
         :root {
             --primary-blue: #006699;
             --primary-orange: #f37021;
-            --text-dark: #333;
         }
 
         body {
@@ -22,8 +21,7 @@
             overflow: hidden;
         }
 
-        /* Header & Navigation */
-        .header { width: 100%; padding: 15px 0; text-align: center; font-weight: bold; position: relative; }
+        .header { width: 100%; padding: 15px 0; text-align: center; font-weight: bold; }
         .tabs { display: flex; width: 100%; background: #e0e0e0; }
         .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #666; }
         .tab.active { 
@@ -34,21 +32,23 @@
 
         /* Timer Circle */
         .timer-container { margin-top: 50px; position: relative; width: 250px; height: 250px; }
-        svg { transform: rotate(-90deg); }
+        
+        /* Container rotates so 0% is at the top, but children stay clockwise */
+        svg { transform: rotate(-90deg); scale: 1 -1; } 
+
         .base-circle { fill: none; stroke: #eee; stroke-width: 30; }
         .progress-circle { 
             fill: none; 
-            stroke: var(--primary-orange); 
             stroke-width: 30; 
             stroke-dasharray: 660; 
             stroke-dashoffset: 660; 
-            transition: stroke-dashoffset 0.1s linear;
+            transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
         }
+
         .counter-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5rem; font-weight: bold; }
 
-        #instruction { margin-top: 40px; font-size: 1.8rem; font-weight: bold; color: var(--primary-orange); height: 1.5em; }
+        #instruction { margin-top: 40px; font-size: 1.8rem; font-weight: bold; height: 1.5em; text-align: center; }
 
-        /* Animated Droplet Icon */
         .icon-area { flex-grow: 1; width: 100%; position: relative; display: flex; justify-content: center; }
         #droplet {
             position: absolute; bottom: 80px; width: 50px; height: 70px;
@@ -57,7 +57,6 @@
             transition: transform 1s ease-in-out, background-color 0.3s;
         }
 
-        /* Controls */
         .footer { width: 100%; padding: 20px 0 40px; display: flex; justify-content: space-evenly; }
         .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #eee; cursor: pointer; font-size: 1.2rem; }
         .btn-main { background: #2b3a67; color: white; }
@@ -106,7 +105,12 @@
             play: document.getElementById('playBtn')
         };
 
-        function setMode(m) { mode = m; appReset(); document.getElementById('slowTab').className = m==='slow'?'tab active':'tab'; document.getElementById('quickTab').className = m==='quick'?'tab active':'tab'; }
+        function setMode(m) { 
+            mode = m; 
+            appReset(); 
+            document.getElementById('slowTab').className = m === 'slow' ? 'tab active' : 'tab'; 
+            document.getElementById('quickTab').className = m === 'quick' ? 'tab active' : 'tab'; 
+        }
 
         function togglePlay() { 
             isRunning = !isRunning; 
@@ -116,41 +120,64 @@
 
         function appReset() {
             clearInterval(timer); timer = null; isRunning = false; rep = 1;
-            el.play.innerText = "▶"; updateProgress(1);
-            el.instr.innerText = "ready?"; el.instr.style.color = COLORS.orange;
-            el.drop.style.transform = "translateY(0)"; el.drop.style.backgroundColor = COLORS.orange;
+            el.play.innerText = "▶"; 
+            updateProgress(0); // Reset to empty circle
+            el.instr.innerText = "ready?"; 
+            el.instr.style.color = COLORS.orange;
+            el.drop.style.transform = "translateY(0)"; 
+            el.drop.style.backgroundColor = COLORS.orange;
         }
 
         function runCycle() {
-            if (rep > 10) { alert("Done!"); appReset(); return; }
-            const sTime = (mode === 'slow') ? 10 : 1;
-            const rTime = (mode === 'slow') ? 4 : 1;
+            if (rep > 10) { alert("Exercise Complete!"); appReset(); return; }
+            
+            const squeezeDuration = (mode === 'slow') ? 10 : 1;
+            const restDuration = (mode === 'slow') ? 4 : 1;
+            const fullCircleTime = squeezeDuration + restDuration;
 
-            startPhase(sTime, "squeeze", COLORS.orange, -200, () => {
-                startPhase(rTime, "relax", COLORS.blue, 0, () => {
-                    rep++; runCycle();
+            // Start Phase 1: Squeeze (Orange)
+            startPhase(squeezeDuration, fullCircleTime, 0, "squeeze", COLORS.orange, -200, () => {
+                // Start Phase 2: Relax (Blue)
+                startPhase(restDuration, fullCircleTime, squeezeDuration, "breath", COLORS.blue, 0, () => {
+                    rep++; 
+                    runCycle();
                 });
             });
         }
 
-        function startPhase(sec, txt, col, y, cb) {
-            timeLeft = total = sec;
-            el.instr.innerText = txt; el.instr.style.color = col;
-            el.drop.style.backgroundColor = col; el.progress.style.stroke = col;
+        function startPhase(phaseSec, circleTotal, startOffset, txt, col, y, cb) {
+            let phaseElapsed = 0;
+            el.instr.innerText = txt; 
+            el.instr.style.color = col;
+            el.drop.style.backgroundColor = col; 
+            el.progress.style.stroke = col;
             el.drop.style.transform = `translateY(${y}px)`;
 
             timer = setInterval(() => {
                 if (!isRunning) return;
-                timeLeft -= 0.1;
-                updateProgress(timeLeft / total);
-                if (timeLeft <= 0) { clearInterval(timer); timer = null; cb(); }
-            }, 100);
+
+                phaseElapsed += 0.05;
+                const totalElapsed = startOffset + phaseElapsed;
+                
+                updateProgress(totalElapsed / circleTotal);
+
+                if (phaseElapsed >= phaseSec) { 
+                    clearInterval(timer); 
+                    timer = null; 
+                    cb(); 
+                }
+            }, 50);
         }
 
-        function updateProgress(p) {
-            el.progress.style.strokeDashoffset = 660 - (p * 660);
+        function updateProgress(ratio) {
+            // Clockwise logic: offset 660 is empty, 0 is full.
+            const offset = 660 - (ratio * 660);
+            el.progress.style.strokeDashoffset = offset;
             el.counter.innerText = `${rep} of 10`;
         }
+
+        // Initialize state
+        updateProgress(0);
     </script>
 </body>
 </html>
