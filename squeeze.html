@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now v1.9</title>
+    <title>Squeeze Now v2.0</title>
     <style>
         :root {
             --primary-blue: #006699;
             --primary-orange: #f37021;
-            --off-white: #f0f0f0;
         }
 
         body {
@@ -33,15 +32,20 @@
             clip-path: polygon(0% 0%, 92% 0%, 100% 50%, 92% 100%, 0% 100%);
         }
 
-        /* TIMER BOX */
+        /* TIMER BOX - FORCED CLOCKWISE v2.0 */
         .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; z-index: 5; }
-        svg { transform: rotate(-90deg); } 
+        
+        /* To fix anti-clockwise: We flip the X-axis (scaleX -1) 
+           and rotate -90 to start at 12:00.
+        */
+        svg { transform: rotate(-90deg) scaleX(-1); } 
+
         .base-circle { fill: none; stroke: #eee; stroke-width: 32; }
         .progress-segment { fill: none; stroke-width: 33; stroke-dasharray: 660; stroke-dashoffset: 660; transition: stroke-dashoffset 0.1s linear; }
 
         .counter-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8rem; font-weight: 800; color: #111; }
 
-        #instruction { margin-top: 35px; font-size: 2.2rem; font-weight: bold; color: var(--primary-orange); text-align: center; height: 1.2em; }
+        #instruction { margin-top: 35px; font-size: 2.2rem; font-weight: bold; text-align: center; height: 1.2em; }
 
         /* DROPLET TRACKING */
         .viewport-track { position: absolute; top: 450px; bottom: 120px; width: 100%; pointer-events: none; }
@@ -52,21 +56,28 @@
             transition: bottom 0.1s linear, background-color 0.4s;
         }
 
-        /* FOOTER & BUTTON STATES */
+        /* iPhone "Vibration" Alternative: Visual Shake */
+        @keyframes haptic-shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+        .vibrate-visual { animation: haptic-shake 0.2s ease-in-out; }
+
+        /* FOOTER */
         .footer { width: 100%; padding: 20px 0 40px; display: flex; justify-content: space-evenly; background: white; z-index: 10; margin-top: auto; }
-        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: var(--off-white); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-        .btn svg { transform: none; width: 24px; height: 24px; fill: #666; }
-        
-        /* Active Toggled State */
+        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .btn svg { width: 24px; height: 24px; fill: #666; }
         .btn.enabled { background: #d0e0ff; }
         .btn.enabled svg { fill: var(--primary-blue); }
-
         .btn-play { background: #23315a; color: white; font-size: 1.4rem; }
     </style>
 </head>
 <body>
 
-    <div class="header">squeeze now v1.9</div>
+    <div class="header">squeeze now v2.0</div>
 
     <div class="tabs">
         <div class="tab active" id="slowTab" onclick="updateMode('slow')">slow</div>
@@ -107,9 +118,7 @@
         const CIRCUM = 660;
 
         let mode = 'slow', isRunning = false, currentRep = 1, timer = null, elapsed = 0;
-        let isVibrateEnabled = false;
-        let isSoundEnabled = false;
-        let lastQuickSecond = -1;
+        let isVibrateEnabled = false, isSoundEnabled = false, lastQuickSec = -1;
 
         const ui = {
             orange: document.getElementById('orangeProgress'),
@@ -124,35 +133,33 @@
             soundBtn: document.getElementById('soundBtn')
         };
 
-        // --- NEW: Audio Engine ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playChime() {
+        function playChime(freq = 550) {
             if (!isSoundEnabled) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(550, audioCtx.currentTime);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
             gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
         }
 
-        function triggerFeedback() {
-            if (isVibrateEnabled && navigator.vibrate) navigator.vibrate(100);
-            playChime();
+        function triggerFeedback(isSqueeze = true) {
+            // Visual Shake (Fallback for iPhone)
+            if (isVibrateEnabled) {
+                ui.drop.classList.remove('vibrate-visual');
+                void ui.drop.offsetWidth; // Trigger reflow
+                ui.drop.classList.add('vibrate-visual');
+                if (navigator.vibrate) navigator.vibrate(100);
+            }
+            // Sound Pitch differentiation
+            if (isSoundEnabled) playChime(isSqueeze ? 660 : 440);
         }
 
-        // --- Toggle Handlers ---
-        function toggleVibrate() {
-            isVibrateEnabled = !isVibrateEnabled;
-            ui.vibeBtn.classList.toggle('enabled', isVibrateEnabled);
-        }
-
-        function toggleSound() {
-            isSoundEnabled = !isSoundEnabled;
+        function toggleVibrate() { isVibrateEnabled = !isVibrateEnabled; ui.vibeBtn.classList.toggle('enabled', isVibrateEnabled); }
+        function toggleSound() { 
+            isSoundEnabled = !isSoundEnabled; 
             ui.soundBtn.classList.toggle('enabled', isSoundEnabled);
             if (isSoundEnabled && audioCtx.state === 'suspended') audioCtx.resume();
         }
@@ -190,7 +197,7 @@
 
         function killTimer() {
             clearInterval(timer); timer = null; isRunning = false; 
-            currentRep = 1; elapsed = 0; lastQuickSecond = -1;
+            currentRep = 1; elapsed = 0; lastQuickSec = -1;
             ui.play.innerText = "▶"; draw(0, 0);
             ui.instr.innerText = "ready?"; ui.instr.style.color = COLORS.orange;
             ui.drop.style.bottom = "0%"; ui.drop.style.backgroundColor = COLORS.orange;
@@ -198,49 +205,46 @@
 
         function runSession() {
             elapsed = 0;
-            triggerFeedback(); // Initial start chime
+            triggerFeedback(true);
             timer = setInterval(() => {
                 if (!isRunning) return;
                 elapsed += 0.1;
-                if (mode === 'slow') handleSlowMode(); else handleQuickMode();
+                if (mode === 'slow') handleSlow(); else handleQuick();
             }, 100);
         }
 
-        function handleSlowMode() {
-            const squeeze = 10, breath = 4, total = 14;
-            if (elapsed <= squeeze) {
+        function handleSlow() {
+            const sq = 10, br = 4, tot = 14;
+            if (elapsed <= sq) {
                 ui.instr.innerText = "squeeze"; ui.instr.style.color = COLORS.orange;
                 ui.drop.style.backgroundColor = COLORS.orange;
-                ui.drop.style.bottom = (elapsed / squeeze * 100) + "%";
-                draw(elapsed / total, 0);
-            } else if (elapsed <= total) {
-                if (ui.instr.innerText === "squeeze") triggerFeedback(); // Transition to breath
+                ui.drop.style.bottom = (elapsed / sq * 100) + "%";
+                draw(elapsed / tot, 0);
+            } else if (elapsed <= tot) {
+                if (ui.instr.innerText === "squeeze") triggerFeedback(false);
                 ui.instr.innerText = "breath"; ui.instr.style.color = COLORS.blue;
                 ui.drop.style.backgroundColor = COLORS.blue;
-                ui.drop.style.bottom = (100 - ((elapsed - squeeze) / breath * 100)) + "%";
-                draw(squeeze / total, (elapsed - squeeze) / total);
+                ui.drop.style.bottom = (100 - ((elapsed - sq) / br * 100)) + "%";
+                draw(sq / tot, (elapsed - sq) / tot);
             } else {
                 currentRep++; elapsed = 0;
-                if (currentRep > 10) { alert("Done!"); killTimer(); } else { triggerFeedback(); }
+                if (currentRep > 10) { alert("Session Complete!"); killTimer(); } else { triggerFeedback(true); }
             }
         }
 
-        function handleQuickMode() {
-            const totalCycle = 20;
-            if (elapsed > totalCycle) { alert("Quick Done!"); killTimer(); return; }
-            const curSec = Math.floor(elapsed);
-            if (curSec !== lastQuickSecond) {
-                lastQuickSecond = curSec;
-                triggerFeedback(); // Every 1 second
-            }
-            const isSqueeze = (curSec % 2 === 0);
+        function handleQuick() {
+            const totCycle = 20;
+            if (elapsed > totCycle) { alert("Quick Session Complete!"); killTimer(); return; }
+            const cur = Math.floor(elapsed);
+            if (cur !== lastQuickSec) { lastQuickSec = cur; triggerFeedback(cur % 2 === 0); }
+            const isSq = (cur % 2 === 0);
             const sub = elapsed % 1;
-            ui.instr.innerText = isSqueeze ? "squeeze" : "breath";
-            ui.instr.style.color = isSqueeze ? COLORS.orange : COLORS.blue;
-            ui.drop.style.backgroundColor = isSqueeze ? COLORS.orange : COLORS.blue;
-            ui.drop.style.bottom = isSqueeze ? (sub * 100) + "%" : (100 - (sub * 100)) + "%";
-            ui.quickWipe.style.strokeDashoffset = (elapsed / totalCycle * CIRCUM);
-            ui.counter.innerText = (Math.floor(curSec / 2) + 1) + " of 10";
+            ui.instr.innerText = isSq ? "squeeze" : "breath";
+            ui.instr.style.color = isSq ? COLORS.orange : COLORS.blue;
+            ui.drop.style.backgroundColor = isSq ? COLORS.orange : COLORS.blue;
+            ui.drop.style.bottom = isSq ? (sub * 100) + "%" : (100 - (sub * 100)) + "%";
+            ui.quickWipe.style.strokeDashoffset = (elapsed / totCycle * CIRCUM);
+            ui.counter.innerText = (Math.floor(cur / 2) + 1) + " of 10";
         }
 
         function draw(o, b) {
