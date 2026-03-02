@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now v1.6</title>
+    <title>Squeeze Now v1.7</title>
     <style>
         :root {
             --primary-blue: #006699;
@@ -31,7 +31,7 @@
             border-bottom: 1px solid #eee;
         }
 
-        .tabs { display: flex; width: 100%; background: #e0e0e0; }
+        .tabs { display: flex; width: 100%; background: #e0e0e0; z-index: 10; }
         .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #555; font-weight: 500; }
         .tab.active { 
             background-color: var(--primary-blue); 
@@ -40,19 +40,15 @@
         }
 
         /* TIMER BOX */
-        .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; }
-        
-        /* Fixed Clockwise: Start at 12:00 (rotate -90) and fill forward */
+        .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; z-index: 5; }
         svg { transform: rotate(-90deg); } 
-
         .base-circle { fill: none; stroke: #eee; stroke-width: 32; }
-        
         .progress-segment {
             fill: none;
             stroke-width: 32;
             stroke-dasharray: 660; 
             stroke-dashoffset: 660; 
-            transition: stroke-dashoffset 0.05s linear;
+            transition: stroke-dashoffset 0.1s linear;
         }
 
         .counter-text { 
@@ -66,35 +62,44 @@
             color: var(--primary-orange); text-align: center; height: 1.2em; 
         }
 
-        /* DROPLET PHYSICS v1.6 */
-        .icon-track { 
-            flex-grow: 1; 
-            width: 100%; 
-            position: relative; 
-            display: flex; 
-            justify-content: center;
-            align-items: flex-end; /* Align to bottom of this container */
-            padding-bottom: 40px;
+        /* DROPLET TRACKING v1.7 */
+        .viewport-track {
+            position: absolute;
+            top: 450px; /* Below the circle/instruction text */
+            bottom: 120px; /* Above the footer */
+            width: 100%;
+            pointer-events: none;
         }
 
         #droplet {
+            position: absolute;
+            left: 50%;
+            bottom: 0%; /* Start at the bottom of the track */
             width: 60px;
             height: 85px;
+            margin-left: -30px; /* Center horizontally */
             background-color: var(--primary-orange);
-            /* Shape based on your provided attachment */
             clip-path: path('M30 0 C15 40 0 55 0 75 L60 75 C60 55 45 40 30 0 Z');
-            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s;
-            transform: translateY(0); /* Start position */
+            /* Transition is linear to match the timer progress */
+            transition: bottom 0.1s linear, background-color 0.4s;
         }
 
-        .footer { width: 100%; padding: 20px 0 45px; display: flex; justify-content: space-evenly; }
+        .footer { 
+            width: 100%; 
+            padding: 20px 0 40px; 
+            display: flex; 
+            justify-content: space-evenly; 
+            background: white;
+            z-index: 10;
+            margin-top: auto;
+        }
         .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; }
         .btn-play { background: #23315a; color: white; }
     </style>
 </head>
 <body>
 
-    <div class="header">squeeze now v1.6</div>
+    <div class="header">squeeze now v1.7</div>
 
     <div class="tabs">
         <div class="tab active" id="slowTab" onclick="updateMode('slow')">slow</div>
@@ -113,7 +118,7 @@
 
     <div id="instruction">ready?</div>
 
-    <div class="icon-track">
+    <div class="viewport-track">
         <div id="droplet"></div>
     </div>
 
@@ -159,7 +164,7 @@
             draw(0, 0);
             ui.instr.innerText = "ready?";
             ui.instr.style.color = COLORS.orange;
-            ui.drop.style.transform = "translateY(0)";
+            ui.drop.style.bottom = "0%";
             ui.drop.style.backgroundColor = COLORS.orange;
         }
 
@@ -171,36 +176,45 @@
             const totalCycle = squeezeTime + breathTime;
             
             elapsed = 0;
-            ui.instr.innerText = "squeeze";
-            ui.instr.style.color = COLORS.orange;
-            ui.drop.style.backgroundColor = COLORS.orange;
-            
-            // Move up toward circle (250px up from bottom)
-            ui.drop.style.transform = "translateY(-250px)";
 
             timer = setInterval(() => {
                 if (!isRunning) return;
-                elapsed += 0.05;
+                elapsed += 0.1; // 100ms updates for smoother movement
                 
                 if (elapsed <= squeezeTime) {
+                    // SQUEEZE PHASE
+                    ui.instr.innerText = "squeeze";
+                    ui.instr.style.color = COLORS.orange;
+                    ui.drop.style.backgroundColor = COLORS.orange;
+                    
+                    // Slow rise: 0% to 100% over the squeezeTime
+                    const risePercent = (elapsed / squeezeTime) * 100;
+                    ui.drop.style.bottom = risePercent + "%";
+                    
                     draw(elapsed / totalCycle, 0);
+
                 } else if (elapsed <= totalCycle) {
+                    // BREATH PHASE
                     ui.instr.innerText = "breath";
                     ui.instr.style.color = COLORS.blue;
                     ui.drop.style.backgroundColor = COLORS.blue;
                     
-                    // Fall back to bottom
-                    ui.drop.style.transform = "translateY(0)";
+                    // Slow fall: 100% down to 0% over the breathTime
+                    const breathElapsed = elapsed - squeezeTime;
+                    const fallPercent = 100 - ((breathElapsed / breathTime) * 100);
+                    ui.drop.style.bottom = fallPercent + "%";
                     
                     const orangeRatio = squeezeTime / totalCycle;
                     const breathRatio = (elapsed - squeezeTime) / totalCycle;
                     draw(orangeRatio, breathRatio);
+
                 } else {
+                    // END OF CYCLE
                     clearInterval(timer); timer = null;
                     currentRep++;
                     runSession();
                 }
-            }, 50);
+            }, 100);
         }
 
         function draw(orangeRatio, blueRatio) {
