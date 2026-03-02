@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Squeeze Now - Pelvic Trainer</title>
+    <style>
+        :root {
+            --primary-blue: #006699;
+            --primary-orange: #f37021;
+            --bg-gray: #f8f9fa;
+            --text-dark: #333;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Header & Tabs */
+        .header {
+            width: 100%;
+            padding: 15px 0;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            position: relative;
+        }
+
+        .tabs {
+            display: flex;
+            width: 100%;
+            background: #e0e0e0;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 500;
+            transition: 0.3s;
+            color: #666;
+        }
+
+        .tab.active {
+            background-color: var(--primary-blue);
+            color: white;
+            clip-path: polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%);
+        }
+
+        .tab.quick.active {
+            background-color: var(--primary-blue);
+        }
+
+        /* Progress Circle */
+        .timer-container {
+            margin-top: 50px;
+            position: relative;
+            width: 250px;
+            height: 250px;
+        }
+
+        svg {
+            transform: rotate(-90deg);
+        }
+
+        .base-circle {
+            fill: none;
+            stroke: #eee;
+            stroke-width: 35;
+        }
+
+        .progress-circle {
+            fill: none;
+            stroke: var(--primary-orange);
+            stroke-width: 35;
+            stroke-dasharray: 660;
+            stroke-dashoffset: 660;
+            stroke-linecap: butt;
+            transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
+        }
+
+        .counter-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--text-dark);
+        }
+
+        /* Instruction Label */
+        #instruction {
+            margin-top: 40px;
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--primary-orange);
+            text-transform: lowercase;
+            transition: color 0.3s;
+        }
+
+        /* Floating Icon */
+        .floating-icon-container {
+            flex-grow: 1;
+            width: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+
+        #droplet {
+            position: absolute;
+            bottom: 50px;
+            width: 60px;
+            height: 80px;
+            background-color: var(--primary-orange);
+            clip-path: path('M30 0 C10 40 0 55 0 70 A30 30 0 1 0 60 70 C60 55 50 40 30 0');
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s;
+        }
+
+        /* Controls */
+        .footer-controls {
+            width: 100%;
+            padding: 20px 0 40px;
+            display: flex;
+            justify-content: space-evenly;
+            background: white;
+        }
+
+        .btn-circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .btn-pause {
+            background: #2b3a67;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">squeeze now <span style="position:absolute; right:20px; color:#666">?</span></div>
+
+    <div class="tabs">
+        <div class="tab active" id="slowTab" onclick="setMode('slow')">slow</div>
+        <div class="tab" id="quickTab" onclick="setMode('quick')">quick</div>
+        <div class="tab">finish</div>
+    </div>
+
+    <div class="timer-container">
+        <svg width="250" height="250">
+            <circle class="base-circle" cx="125" cy="125" r="105"></circle>
+            <circle id="progress" class="progress-circle" cx="125" cy="125" r="105"></circle>
+        </svg>
+        <div class="counter-text" id="counter">1 of 10</div>
+    </div>
+
+    <div id="instruction">squeeze</div>
+
+    <div class="floating-icon-container">
+        <div id="droplet"></div>
+    </div>
+
+    <div class="footer-controls">
+        <div class="btn-circle" onclick="reset()">↺</div>
+        <div class="btn-circle">📳</div>
+        <div class="btn-circle">🔇</div>
+        <div class="btn-circle btn-pause" id="playBtn" onclick="togglePlay()">II</div>
+    </div>
+
+    <script>
+        let mode = 'slow';
+        let isRunning = false;
+        let currentRep = 1;
+        let timeLeft = 0;
+        let totalTime = 0;
+        let isSqueezing = true;
+        let timerId = null;
+
+        const progressCircle = document.getElementById('progress');
+        const counterText = document.getElementById('counter');
+        const instructionText = document.getElementById('instruction');
+        const droplet = document.getElementById('droplet');
+        const playBtn = document.getElementById('playBtn');
+
+        function setMode(newMode) {
+            reset();
+            mode = newMode;
+            document.getElementById('slowTab').classList.toggle('active', mode === 'slow');
+            document.getElementById('quickTab').classList.toggle('active', mode === 'quick');
+            startSequence();
+        }
+
+        function togglePlay() {
+            isRunning = !isRunning;
+            playBtn.innerText = isRunning ? "II" : "▶";
+            if (isRunning && !timerId) startSequence();
+        }
+
+        function reset() {
+            isRunning = false;
+            clearInterval(timerId);
+            timerId = null;
+            currentRep = 1;
+            playBtn.innerText = "▶";
+            updateUI(0);
+        }
+
+        function startSequence() {
+            if (currentRep > 10) {
+                alert("Exercise Complete!");
+                reset();
+                return;
+            }
+
+            if (mode === 'slow') {
+                isSqueezing = true;
+                runPhase(10, 'squeeze', var(--primary-orange), -150, () => {
+                    isSqueezing = false;
+                    runPhase(4, 'relax', var(--primary-blue), 0, () => {
+                        currentRep++;
+                        startSequence();
+                    });
+                });
+            } else {
+                // Quick: 1s Squeeze / 1s Rest
+                isSqueezing = true;
+                runPhase(1, 'squeeze', var(--primary-orange), -150, () => {
+                    isSqueezing = false;
+                    runPhase(1, 'relax', var(--primary-blue), 0, () => {
+                        currentRep++;
+                        startSequence();
+                    });
+                });
+            }
+        }
+
+        function runPhase(seconds, text, color, yPos, callback) {
+            timeLeft = seconds;
+            totalTime = seconds;
+            instructionText.innerText = text;
+            instructionText.style.color = color;
+            droplet.style.backgroundColor = color;
+            progressCircle.style.stroke = color;
+            
+            // Move icon up for squeeze, down for rest
+            droplet.style.transform = `translateY(${yPos}px)`;
+
+            if (timerId) clearInterval(timerId);
+            
+            timerId = setInterval(() => {
+                if (!isRunning) return;
+
+                timeLeft -= 0.1;
+                updateUI(timeLeft / totalTime);
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerId);
+                    callback();
+                }
+            }, 100);
+        }
+
+        function updateUI(percent) {
+            const offset = 660 - (percent * 660);
+            progressCircle.style.strokeDashoffset = offset;
+            counterText.innerText = `${currentRep} of 10`;
+        }
+
+        function reset() {
+            clearInterval(timerId);
+            timerId = null;
+            isRunning = false;
+            currentRep = 1;
+            isSqueezing = true;
+            updateUI(1);
+            instructionText.innerText = "ready?";
+            droplet.style.transform = `translateY(0)`;
+            playBtn.innerText = "▶";
+        }
+
+        // Initialize
+        updateUI(1);
+    </script>
+</body>
+</html>
