@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now v2.0</title>
+    <title>Squeeze Now v2.1</title>
     <style>
         :root {
             --primary-blue: #006699;
@@ -24,31 +24,27 @@
 
         .header { width: 100%; padding: 15px 0; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #eee; }
 
-        .tabs { display: flex; width: 100%; background: #e0e0e0; z-index: 10; }
-        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #555; font-weight: 500; }
+        .tabs { display: flex; width: 100%; background: #e0e0e0; }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: #555; }
         .tab.active { 
             background-color: var(--primary-blue); 
             color: white; 
             clip-path: polygon(0% 0%, 92% 0%, 100% 50%, 92% 100%, 0% 100%);
         }
 
-        /* TIMER BOX - FORCED CLOCKWISE v2.0 */
-        .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; z-index: 5; }
+        .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; }
         
-        /* To fix anti-clockwise: We flip the X-axis (scaleX -1) 
-           and rotate -90 to start at 12:00.
-        */
-        svg { transform: rotate(-90deg) scaleX(-1); } 
+        /* SIMPLE CLOCKWISE: Start 12:00, move right */
+        svg { transform: rotate(-90deg); } 
 
         .base-circle { fill: none; stroke: #eee; stroke-width: 32; }
         .progress-segment { fill: none; stroke-width: 33; stroke-dasharray: 660; stroke-dashoffset: 660; transition: stroke-dashoffset 0.1s linear; }
 
-        .counter-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8rem; font-weight: 800; color: #111; }
+        .counter-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8rem; font-weight: 800; }
 
         #instruction { margin-top: 35px; font-size: 2.2rem; font-weight: bold; text-align: center; height: 1.2em; }
 
-        /* DROPLET TRACKING */
-        .viewport-track { position: absolute; top: 450px; bottom: 120px; width: 100%; pointer-events: none; }
+        .viewport-track { position: absolute; top: 450px; bottom: 120px; width: 100%; }
         #droplet {
             position: absolute; left: 50%; bottom: 0%; width: 60px; height: 85px; margin-left: -30px; 
             background-color: var(--primary-orange);
@@ -56,19 +52,8 @@
             transition: bottom 0.1s linear, background-color 0.4s;
         }
 
-        /* iPhone "Vibration" Alternative: Visual Shake */
-        @keyframes haptic-shake {
-            0% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            50% { transform: translateX(5px); }
-            75% { transform: translateX(-5px); }
-            100% { transform: translateX(0); }
-        }
-        .vibrate-visual { animation: haptic-shake 0.2s ease-in-out; }
-
-        /* FOOTER */
-        .footer { width: 100%; padding: 20px 0 40px; display: flex; justify-content: space-evenly; background: white; z-index: 10; margin-top: auto; }
-        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .footer { width: 100%; padding: 20px 0 40px; display: flex; justify-content: space-evenly; margin-top: auto; }
+        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .btn svg { width: 24px; height: 24px; fill: #666; }
         .btn.enabled { background: #d0e0ff; }
         .btn.enabled svg { fill: var(--primary-blue); }
@@ -77,7 +62,7 @@
 </head>
 <body>
 
-    <div class="header">squeeze now v2.0</div>
+    <div class="header">squeeze now v2.1</div>
 
     <div class="tabs">
         <div class="tab active" id="slowTab" onclick="updateMode('slow')">slow</div>
@@ -91,7 +76,7 @@
             <g id="quickSegments" style="display:none;"></g>
             <circle id="blueProgress" class="progress-segment" cx="130" cy="130" r="105" stroke="#006699"></circle>
             <circle id="orangeProgress" class="progress-segment" cx="130" cy="130" r="105" stroke="#f37021"></circle>
-            <circle id="quickWipe" class="progress-segment" cx="130" cy="130" r="105" stroke="#eee" style="display:none;"></circle>
+            <circle id="quickWipe" class="progress-segment" cx="130" cy="130" r="105" stroke="#eee"></circle>
         </svg>
         <div class="counter-text" id="counter">1 of 10</div>
     </div>
@@ -104,19 +89,14 @@
 
     <div class="footer">
         <button class="btn" onclick="killTimer()">↺</button>
-        <button class="btn" id="vibeBtn" onclick="toggleVibrate()">
-            <svg viewBox="0 0 24 24"><path d="M16 3H8C6.9 3 6 3.9 6 5V19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V5C18 3.9 17.1 3 16 3M16 19H8V5H16V19M7.5 7.5V16.5M4.5 9V15M19.5 9V15M16.5 7.5V16.5"/></svg>
-        </button>
-        <button class="btn" id="soundBtn" onclick="toggleSound()">
-            <svg viewBox="0 0 24 24"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.02C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg>
-        </button>
+        <button class="btn" id="vibeBtn" onclick="toggleVibrate()"><svg viewBox="0 0 24 24"><path d="M16 3H8C6.9 3 6 3.9 6 5V19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V5C18 3.9 17.1 3 16 3M16 19H8V5H16V19M7.5 7.5V16.5M4.5 9V15M19.5 9V15M16.5 7.5V16.5"/></svg></button>
+        <button class="btn" id="soundBtn" onclick="toggleSound()"><svg viewBox="0 0 24 24"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.02C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg></button>
         <button class="btn btn-play" id="playBtn" onclick="togglePlay()">▶</button>
     </div>
 
     <script>
-        const COLORS = { orange: "#f37021", blue: "#006699" };
+        const COLORS = { orange: "#f37021", blue: "#006699", gray: "#eeeeee" };
         const CIRCUM = 660;
-
         let mode = 'slow', isRunning = false, currentRep = 1, timer = null, elapsed = 0;
         let isVibrateEnabled = false, isSoundEnabled = false, lastQuickSec = -1;
 
@@ -134,34 +114,16 @@
         };
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playChime(freq = 550) {
-            if (!isSoundEnabled) return;
+        function playHapticTone() {
+            if (!isVibrateEnabled && !isSoundEnabled) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-        }
-
-        function triggerFeedback(isSqueeze = true) {
-            // Visual Shake (Fallback for iPhone)
-            if (isVibrateEnabled) {
-                ui.drop.classList.remove('vibrate-visual');
-                void ui.drop.offsetWidth; // Trigger reflow
-                ui.drop.classList.add('vibrate-visual');
-                if (navigator.vibrate) navigator.vibrate(100);
-            }
-            // Sound Pitch differentiation
-            if (isSoundEnabled) playChime(isSqueeze ? 660 : 440);
-        }
-
-        function toggleVibrate() { isVibrateEnabled = !isVibrateEnabled; ui.vibeBtn.classList.toggle('enabled', isVibrateEnabled); }
-        function toggleSound() { 
-            isSoundEnabled = !isSoundEnabled; 
-            ui.soundBtn.classList.toggle('enabled', isSoundEnabled);
-            if (isSoundEnabled && audioCtx.state === 'suspended') audioCtx.resume();
+            osc.type = isVibrateEnabled ? 'square' : 'sine'; // Square sounds "thumpier" like haptics
+            osc.frequency.setValueAtTime(isVibrateEnabled ? 80 : 550, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         }
 
         function initQuickUI() {
@@ -171,7 +133,7 @@
                 circle.setAttribute("cx", 130); circle.setAttribute("cy", 130); circle.setAttribute("r", 105);
                 circle.setAttribute("fill", "none"); circle.setAttribute("stroke-width", 32);
                 circle.setAttribute("stroke", i % 2 === 0 ? COLORS.orange : COLORS.blue);
-                circle.setAttribute("stroke-dasharray", `33 ${CIRCUM - 33}`);
+                circle.setAttribute("stroke-dasharray", `33 627`);
                 circle.setAttribute("transform", `rotate(${i * 18}, 130, 130)`);
                 ui.quickG.appendChild(circle);
             }
@@ -198,14 +160,15 @@
         function killTimer() {
             clearInterval(timer); timer = null; isRunning = false; 
             currentRep = 1; elapsed = 0; lastQuickSec = -1;
-            ui.play.innerText = "▶"; draw(0, 0);
-            ui.instr.innerText = "ready?"; ui.instr.style.color = COLORS.orange;
+            ui.play.innerText = "▶"; ui.instr.innerText = "ready?";
             ui.drop.style.bottom = "0%"; ui.drop.style.backgroundColor = COLORS.orange;
+            ui.quickWipe.style.strokeDashoffset = CIRCUM; 
+            ui.orange.style.strokeDashoffset = CIRCUM; 
+            ui.blue.style.strokeDashoffset = CIRCUM;
         }
 
         function runSession() {
-            elapsed = 0;
-            triggerFeedback(true);
+            elapsed = 0; playHapticTone();
             timer = setInterval(() => {
                 if (!isRunning) return;
                 elapsed += 0.1;
@@ -219,39 +182,37 @@
                 ui.instr.innerText = "squeeze"; ui.instr.style.color = COLORS.orange;
                 ui.drop.style.backgroundColor = COLORS.orange;
                 ui.drop.style.bottom = (elapsed / sq * 100) + "%";
-                draw(elapsed / tot, 0);
+                ui.orange.style.strokeDashoffset = CIRCUM - (elapsed / tot * CIRCUM);
             } else if (elapsed <= tot) {
-                if (ui.instr.innerText === "squeeze") triggerFeedback(false);
-                ui.instr.innerText = "breath"; ui.instr.style.color = COLORS.blue;
-                ui.drop.style.backgroundColor = COLORS.blue;
+                if (ui.instr.innerText === "squeeze") { ui.instr.innerText = "breath"; playHapticTone(); }
+                ui.instr.style.color = COLORS.blue; ui.drop.style.backgroundColor = COLORS.blue;
                 ui.drop.style.bottom = (100 - ((elapsed - sq) / br * 100)) + "%";
-                draw(sq / tot, (elapsed - sq) / tot);
+                ui.blue.style.strokeDashoffset = CIRCUM - (elapsed / tot * CIRCUM);
             } else {
                 currentRep++; elapsed = 0;
-                if (currentRep > 10) { alert("Session Complete!"); killTimer(); } else { triggerFeedback(true); }
+                if (currentRep > 10) { alert("Complete!"); killTimer(); } else { playHapticTone(); }
             }
+            ui.counter.innerText = `${currentRep} of 10`;
         }
 
         function handleQuick() {
-            const totCycle = 20;
-            if (elapsed > totCycle) { alert("Quick Session Complete!"); killTimer(); return; }
+            const tot = 20;
+            if (elapsed > tot) { alert("Quick Complete!"); killTimer(); return; }
             const cur = Math.floor(elapsed);
-            if (cur !== lastQuickSec) { lastQuickSec = cur; triggerFeedback(cur % 2 === 0); }
+            if (cur !== lastQuickSec) { lastQuickSec = cur; playHapticTone(); }
             const isSq = (cur % 2 === 0);
             const sub = elapsed % 1;
             ui.instr.innerText = isSq ? "squeeze" : "breath";
             ui.instr.style.color = isSq ? COLORS.orange : COLORS.blue;
             ui.drop.style.backgroundColor = isSq ? COLORS.orange : COLORS.blue;
             ui.drop.style.bottom = isSq ? (sub * 100) + "%" : (100 - (sub * 100)) + "%";
-            ui.quickWipe.style.strokeDashoffset = (elapsed / totCycle * CIRCUM);
+            // Invert logic: wipe reveals by reducing its offset from 660 to 0
+            ui.quickWipe.style.strokeDashoffset = CIRCUM - (elapsed / tot * CIRCUM);
             ui.counter.innerText = (Math.floor(cur / 2) + 1) + " of 10";
         }
 
-        function draw(o, b) {
-            ui.orange.style.strokeDashoffset = CIRCUM - (o * CIRCUM);
-            ui.blue.style.strokeDashoffset = CIRCUM - ((o + b) * CIRCUM);
-            ui.counter.innerText = `${currentRep} of 10`;
-        }
+        function toggleVibrate() { isVibrateEnabled = !isVibrateEnabled; ui.vibeBtn.classList.toggle('enabled', isVibrateEnabled); }
+        function toggleSound() { isSoundEnabled = !isSoundEnabled; ui.soundBtn.classList.toggle('enabled', isSoundEnabled); }
         updateMode('slow');
     </script>
 </body>
