@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squeeze Now v1.4</title>
+    <title>Squeeze Now v1.5</title>
     <style>
         :root {
             --primary-blue: #006699;
             --primary-orange: #f37021;
-            --bg-gray: #f8f9fa;
         }
 
         body {
@@ -23,14 +22,12 @@
             user-select: none;
         }
 
-        /* Title with Version */
         .header { 
             width: 100%; 
             padding: 15px 0; 
             text-align: center; 
             font-weight: bold; 
             font-size: 1.2rem; 
-            position: relative; 
             border-bottom: 1px solid #eee;
         }
 
@@ -42,11 +39,13 @@
             clip-path: polygon(0% 0%, 92% 0%, 100% 50%, 92% 100%, 0% 100%);
         }
 
-        /* The Clockwise SVG Logic */
+        /* TIMER BOX */
         .timer-container { margin-top: 40px; position: relative; width: 260px; height: 260px; }
         
-        /* scaleX(-1) and rotate(-90deg) ensures 0 is at top and moves right (clockwise) */
-        svg { transform: rotate(-90deg) scaleX(-1); } 
+        /* -90deg rotation moves the SVG 'start' (3 o'clock) to 12 o'clock.
+           We do NOT use scaleX(-1) here to avoid anti-clockwise confusion.
+        */
+        svg { transform: rotate(-90deg); } 
 
         .base-circle { fill: none; stroke: #eee; stroke-width: 32; }
         
@@ -55,7 +54,6 @@
             stroke-width: 32;
             stroke-dasharray: 660; 
             stroke-dashoffset: 660; 
-            stroke-linecap: butt;
             transition: stroke-dashoffset 0.05s linear;
         }
 
@@ -70,7 +68,7 @@
             color: var(--primary-orange); text-align: center; height: 1.2em; 
         }
 
-        /* Droplet Animation */
+        /* Droplet */
         .icon-track { flex-grow: 1; width: 100%; position: relative; display: flex; justify-content: center; }
         #droplet {
             position: absolute; bottom: 60px; width: 55px; height: 75px;
@@ -79,7 +77,6 @@
             transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s;
         }
 
-        /* Footer Controls */
         .footer { width: 100%; padding: 20px 0 45px; display: flex; justify-content: space-evenly; }
         .btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #f0f0f0; cursor: pointer; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; }
         .btn-play { background: #23315a; color: white; }
@@ -87,7 +84,7 @@
 </head>
 <body>
 
-    <div class="header">squeeze now v1.4 <span style="position:absolute; right:20px; font-weight:normal; opacity:0.4">?</span></div>
+    <div class="header">squeeze now v1.5</div>
 
     <div class="tabs">
         <div class="tab active" id="slowTab" onclick="updateMode('slow')">slow</div>
@@ -193,10 +190,12 @@
         }
 
         function draw(orangeRatio, blueRatio) {
-            // Orange fills clockwise from 0
+            // To make it fill clockwise from the top:
+            // Full circle is 0 offset. Empty is 660.
+            // Math: 660 - (ratio * 660)
             ui.orange.style.strokeDashoffset = CIRCUM - (orangeRatio * CIRCUM);
             
-            // Blue fills starting from the end of orange
+            // Blue layer starts where orange ends
             const totalRatio = orangeRatio + blueRatio;
             ui.blue.style.strokeDashoffset = CIRCUM - (totalRatio * CIRCUM);
             
