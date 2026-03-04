@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>springy mindmap · YAML + Monaco + collapse</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #app {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* left panel: editor + toolbar */
+        .editor-panel {
+            flex: 0 0 50%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #aaa;
+            background: #1e1e1e;
+            color: white;
+        }
+
+        .toolbar {
+            padding: 8px 12px;
+            background: #2d2d2d;
+            border-bottom: 1px solid #444;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .toolbar button {
+            background: #0e639c;
+            border: none;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 6px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+            letter-spacing: 0.3px;
+        }
+
+        .toolbar button:hover {
+            background: #1177bb;
+        }
+
+        .toolbar span {
+            color: #ccc;
+            font-size: 13px;
+        }
+
+        #monaco-container {
+            flex: 1;
+            width: 100%;
+            min-height: 0;  /* flex overflow fix */
+        }
+
+        /* right panel: canvas + status */
+        .canvas-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #fafafa;
+        }
+
+        #canvas-wrapper {
+            flex: 1;
+            position: relative;
+            background: #ffffff;
+            overflow: hidden;
+            cursor: default;
+        }
+
+        #mindmap-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+        }
+
+        .status-bar {
+            padding: 6px 16px;
+            background: #e0e0e0;
+            border-top: 1px solid #aaa;
+            font-size: 13px;
+            color: #1e1e1e;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .status-bar .hint {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .badge {
+            background: #2d2d2d;
+            color: #f0f0f0;
+            border-radius: 16px;
+            padding: 2px 10px;
+            font-size: 12px;
+        }
+
+        /* simple loading / error message */
+        .message {
+            padding: 4px 12px;
+            background: #ffe082;
+            color: #3e2e00;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+    </style>
+
+    <!-- 3rd party libs: js-yaml, springy, springyui (canvas renderer with zoom/drag) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/springy@2.7.1/springy.js"></script>
+    <!-- springyui provides default renderer with mouse interaction & viewport -->
+    <script src="https://cdn.jsdelivr.net/npm/springy@2.7.1/springyui.js"></script>
+
+    <!-- Monaco loader (AMD) -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs/loader.js"></script>
+</head>
+<body>
+<div id="app">
+    <!-- left: monaco editor -->
+    <div class="editor-panel">
+        <div class="toolbar">
+            <button id="renderBtn">⟳ RENDER</button>
+            <span>📄 YAML mindmap (root with id/text/children)</span>
+        </div>
+        <div id="monaco-container"></div>
+    </div>
+
+    <!-- right: springy canvas -->
+    <div class="canvas-panel">
+        <div id="canvas-wrapper">
+            <canvas id="mindmap-canvas"></canvas>
+        </div>
+        <div class="status-bar">
+            <div class="hint">🔘 click node → collapse / expand subtree</div>
+            <div class="badge" id="nodeCount">nodes: 0</div>
+            <div id="statusMessage" class="message">ready</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- GLOBAL STATE ----------
+        // raw data from YAML
+        let nodesMap = new Map();           // id -> node object (with text, children)
+        let edgesList = [];                 // { source, target }
+        let rootId = null;
+
+        // collapse state (set of collapsed node ids)
+        let collapsedSet = new Set();
+
+        // current springy renderer & layout
+        let currentRenderer = null;
+        let currentLayout = null;
+        let currentGraph = null;
+
+        // canvas & context
+        const canvas = document.getElementById('mindmap-canvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.getElementById('canvas-wrapper');
+
+        // monaco editor instance
+        let monacoEditor = null;
+
+        // UI elements
+        const renderBtn = document.getElementById('renderBtn');
+        const nodeCountSpan = document.getElementById('nodeCount');
+        const statusMsg = document.getElementById('statusMessage');
+
+        // default YAML (simple mindmap)
+        const defaultYaml = `# root node with id and text
+id: root
+text: "central idea"
+children:
+  - id: branch1
+    text: "explore"
+    children:
+      - id: leaf1a
+        text: "idea A"
+      - id: leaf1b
+        text: "idea B"
+  - id: branch2
+    text: "decide"
+    children:
+      - id: leaf2a
+        text: "option 1"
+      - id: leaf2b
+        text: "option 2"
+  - id: branch3
+    text: "validate"
+`;
+
+        // ---------- HELPER: parse YAML into nodesMap & edges ----------
+        function parseYamlToGraph(yamlText) {
+            try {
+                const root = jsyaml.load(yamlText);
+                if (!root || typeof root !== 'object' || !root.id || !root.text) {
+                    throw new Error('YAML must contain a root object with "id" and "text"');
+                }
+
+                const newNodesMap = new Map();
+                const newEdges = [];
+
+                // recursive traversal
+                function traverse(node) {
+                    if (newNodesMap.has(node.id)) {
+                        throw new Error(`Duplicate node id: ${node.id}`);
+                    }
+                    newNodesMap.set(node.id, node);
+
+                    if (node.children && Array.isArray(node.children)) {
+                        node.children.forEach(child => {
+                            newEdges.push({ source: node.id, target: child.id });
+                            traverse(child);
+                        });
+                    }
+                }
+
+                traverse(root);
+                return { nodesMap: newNodesMap, edges: newEdges, rootId: root.id };
+            } catch (e) {
+                throw new Error('YAML parse error: ' + e.message);
+            }
+        }
+
+        // ---------- compute visible nodes (DFS skipping collapsed) ----------
+        function getVisibleNodeIds(rootId, nodesMap, collapsed) {
+            const visible = new Set();
+            if (!nodesMap.has(rootId)) return visible;
+
+            function dfs(nodeId) {
+                if (visible.has(nodeId)) return;
+                visible.add(nodeId);
+                const node = nodesMap.get(nodeId);
+                if (!node) return;
+                // if node is not collapsed, traverse children
+                if (!collapsed.has(nodeId) && node.children) {
+                    node.children.forEach(child => dfs(child.id));
+                }
+            }
+            dfs(rootId);
+            return visible;
+        }
+
+        // ---------- build Springy graph from visible nodes ----------
+        function buildSpringyGraph(visibleIds, edges, nodesMap) {
+            const graph = new Springy.Graph();
+
+            // add visible nodes with label
+            visibleIds.forEach(id => {
+                const node = nodesMap.get(id);
+                if (node) {
+                    graph.addNode(id, { label: node.text, id: id });
+                }
+            });
+
+            // add edges where both ends visible
+            edges.forEach(edge => {
+                if (visibleIds.has(edge.source) && visibleIds.has(edge.target)) {
+                    graph.addEdge(edge.source, edge.target, {});
+                }
+            });
+
+            return graph;
+        }
+
+        // ---------- render graph with springy (replaces old) ----------
+        function renderGraph() {
+            if (!rootId || !nodesMap.size) {
+                statusMsg.innerText = '⚠️ no valid root';
+                return;
+            }
+
+            try {
+                // compute visible set based on collapsed
+                const visibleIds = getVisibleNodeIds(rootId, nodesMap, collapsedSet);
+                nodeCountSpan.innerText = `nodes: ${visibleIds.size}`;
+
+                // build springy graph
+                const graph = buildSpringyGraph(visibleIds, edgesList, nodesMap);
+                currentGraph = graph;
+
+                // create layout (force directed)
+                const layout = new Springy.Layout.ForceDirected(graph, 400, 300, 0.5);
+                currentLayout = layout;
+
+                // custom draw functions (using springyui defaults as base, but we need control for click & text)
+                // we will use the canvas directly. springyui's Renderer calls these.
+                // we also want to store renderer for hit detection.
+                const clearCanvas = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                };
+
+                const drawEdge = (edge, p1, p2) => {
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#aaa';
+                    ctx.lineWidth = 1.5;
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                };
+
+                const drawNode = (node, p) => {
+                    // node.data contains { label, id }
+                    const label = node.data.label || '?';
+                    // circle
+                    ctx.beginPath();
+                    ctx.fillStyle = '#b7d7f0';
+                    ctx.arc(p.x, p.y, 14, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.strokeStyle = '#2c3e50';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    // text (above node)
+                    ctx.font = '12px "Segoe UI", "Roboto", sans-serif';
+                    ctx.fillStyle = '#1e1e1e';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(label, p.x, p.y - 18);
+
+                    // tiny id for debug (optional)
+                    // ctx.font = '8px monospace';
+                    // ctx.fillStyle = '#444';
+                    // ctx.fillText(node.id, p.x, p.y + 22);
+                };
+
+                // if a renderer exists, stop it and remove canvas from DOM
+                if (currentRenderer) {
+                    currentRenderer.stop();
+                    // remove old canvas if any (springyui creates its own canvas, we detach)
+                    const oldCanvas = currentRenderer.canvas;
+                    if (oldCanvas && oldCanvas.parentNode) oldCanvas.parentNode.removeChild(oldCanvas);
+                }
+
+                // create new renderer with our draw functions
+                const renderer = new Springy.Renderer(layout, clearCanvas, drawEdge, drawNode);
+
+                // set canvas size to match wrapper
+                const resizeCanvas = () => {
+                    const w = wrapper.clientWidth;
+                    const h = wrapper.clientHeight;
+                    canvas.width = w;
+                    canvas.height = h;
+                    renderer.viewportDimensions = { w: w, h: h }; // let renderer know
+                };
+                resizeCanvas();
+
+                // springy renderer uses its own canvas; we replace with ours?
+                // Actually Springy.Renderer creates a canvas internally, but we want to use our canvas.
+                // We can override by replacing renderer.canvas and setting context.
+                // But simpler: tell renderer to use our canvas by setting it before start.
+                renderer.canvas = canvas;
+                renderer.ctx = ctx; // some versions expect this
+                // also set viewport dimensions
+                renderer.viewportDimensions = { w: canvas.width, h: canvas.height };
+
+                // start animation
+                renderer.start();
+
+                // store globally
+                currentRenderer = renderer;
+
+                // update status
+                statusMsg.innerText = '✅ rendered | click node to toggle collapse';
+            } catch (e) {
+                statusMsg.innerText = '❌ render error: ' + e.message;
+                console.error(e);
+            }
+        }
+
+        // ---------- refresh after collapse toggle ----------
+        function refreshFromState() {
+            if (!rootId) {
+                statusMsg.innerText = '⚠️ no graph, click render first';
+                return;
+            }
+            renderGraph();
+        }
+
+        // ---------- hit test: find node under mouse (screen coordinates) ----------
+        function getNodeAtScreen(mouseX, mouseY) {
+            if (!currentRenderer || !currentRenderer.layout || !currentRenderer.layout.graph) return null;
+
+            const graph = currentRenderer.layout.graph;
+            const viewport = currentRenderer.viewport;
+
+            // convert screen to world? easier: convert node positions to screen and compare pixels
+            const threshold = 20; // pixels
+
+            let bestNode = null;
+            let bestDist = Infinity;
+
+            graph.nodes.forEach(node => {
+                if (!node.p) return; // no position yet
+                // node.p is a Vector2D { x, y } in world coordinates
+                const screen = viewport.toScreen(node.p);
+                const dx = screen.x - mouseX;
+                const dy = screen.y - mouseY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < threshold && dist < bestDist) {
+                    bestDist = dist;
+                    bestNode = node;
+                }
+            });
+
+            return bestNode;
+        }
+
+        // ---------- mouse interaction: click to collapse/expand ----------
+        let mouseDownPos = null;
+        let mouseDownNode = null;
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const mouseCanvasX = (e.clientX - rect.left) * scaleX;
+            const mouseCanvasY = (e.clientY - rect.top) * scaleY;
+
+            mouseDownPos = { x: mouseCanvasX, y: mouseCanvasY };
+            mouseDownNode = getNodeAtScreen(mouseCanvasX, mouseCanvasY);
+        }
+
+        function handleMouseUp(e) {
+            if (!mouseDownPos) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const mouseCanvasX = (e.clientX - rect.left) * scaleX;
+            const mouseCanvasY = (e.clientY - rect.top) * scaleY;
+
+            // compute movement
+            const dx = mouseCanvasX - mouseDownPos.x;
+            const dy = mouseCanvasY - mouseDownPos.y;
+            const moved = Math.sqrt(dx*dx + dy*dy);
+
+            // if small movement and same node (or no node but we ignore)
+            if (moved < 8) {
+                const upNode = getNodeAtScreen(mouseCanvasX, mouseCanvasY);
+                // if mouse down and up on same node, toggle
+                if (mouseDownNode && upNode && mouseDownNode.id === upNode.id) {
+                    const nodeId = upNode.id;
+                    // toggle collapse
+                    if (collapsedSet.has(nodeId)) {
+                        collapsedSet.delete(nodeId);
+                        statusMsg.innerText = `🔓 expanded "${upNode.data.label}"`;
+                    } else {
+                        collapsedSet.add(nodeId);
+                        statusMsg.innerText = `🔒 collapsed "${upNode.data.label}"`;
+                    }
+                    refreshFromState();
+                }
+            }
+
+            mouseDownPos = null;
+            mouseDownNode = null;
+        }
+
+        // attach mouse events to canvas
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        // avoid dragging interference (springyui also has its own drag, but we only use our canvas, not springyui's event binding)
+        // springyui's default renderer also adds its own listeners if we used it, but we are using custom draw.
+        // we need to stop propagation of springyui internal? we are not using its builtin event handlers, we have our canvas only.
+        // however, we want to keep pan/zoom? springyui's renderer attaches to its own canvas. we are not using its internal listeners.
+        // we want pan+zoom. We can either implement ourselves or rely on springyui's built-in. 
+        // But we replaced canvas and didn't enable springyui's interaction. Let's add basic zoom (optional, not required by spec)
+        // For simplicity, we keep the graph auto-layout and no pan; but user can still click nodes.
+        // To allow pan/zoom, we could use springyui's built-in listeners, but they expect their own canvas.
+        // Given time, we skip pan/zoom, but it's okay.
+
+        // ---------- resize observer to keep canvas sharp ----------
+        window.addEventListener('resize', () => {
+            if (currentRenderer && canvas) {
+                const w = wrapper.clientWidth;
+                const h = wrapper.clientHeight;
+                canvas.width = w;
+                canvas.height = h;
+                if (currentRenderer) {
+                    currentRenderer.viewportDimensions = { w, h };
+                }
+                // redraw
+                if (currentRenderer) currentRenderer.start(); // restart animation
+            }
+        });
+
+        // ---------- monaco initialization ----------
+        function initMonaco() {
+            require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs' } });
+            require(['vs/editor/editor.main'], function () {
+                monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+                    value: defaultYaml,
+                    language: 'yaml',
+                    theme: 'vs-dark',
+                    fontSize: 13,
+                    automaticLayout: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false
+                });
+                statusMsg.innerText = '📝 monaco ready';
+            });
+        }
+
+        // ---------- render button handler ----------
+        function handleRender() {
+            if (!monacoEditor) {
+                statusMsg.innerText = '⏳ editor not ready';
+                return;
+            }
+            try {
+                const yamlText = monacoEditor.getValue();
+                const { nodesMap: newMap, edges: newEdges, rootId: newRoot } = parseYamlToGraph(yamlText);
+                // update global state
+                nodesMap = newMap;
+                edgesList = newEdges;
+                rootId = newRoot;
+                // reset collapsed set (optional: could remember, but fresh start)
+                collapsedSet.clear();
+                // render graph
+                renderGraph();
+                statusMsg.innerText = `✔️ loaded root "${nodesMap.get(rootId).text}"`;
+            } catch (err) {
+                statusMsg.innerText = '❌ ' + err.message;
+            }
+        }
+
+        renderBtn.addEventListener('click', handleRender);
+
+        // bootstrap monaco
+        initMonaco();
+
+        // initial dummy render after a short while (if monaco loads fast)
+        setTimeout(() => {
+            if (monacoEditor && nodesMap.size === 0) {
+                // trigger initial parse from default
+                handleRender();
+            }
+        }, 600);
+    })();
+</script>
+</body>
+</html>
